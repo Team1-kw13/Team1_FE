@@ -1,12 +1,12 @@
 import './App.css'
-import MainPage from './main/mainpage'
+import Page from './main/page'
 
 function App() {
 
   return (
     <>
-      <div className='container max-w-[430px] mx-auto bg-yellow'>
-        <MainPage/>
+      <div className='container min-w-[430px] mx-auto'>
+        <Page/>
       </div>
     </>
   )
