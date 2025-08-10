@@ -3,7 +3,7 @@ import Sun from "../../assets/images/sun.svg"
 export default function Intro() {
   return (
     <>
-    <div class='h-[455px]' style={{background: `url(${GradientBackground})`}}>
+    <div class="h-[455px] bg-gray100" style={{backgroundImage: `url(${GradientBackground})`}}>
       <div class="pl-[46px]">
         <div class="font-big font-extrabold text-[37px] pb-[10px]">
           <header>반가워요</header>
