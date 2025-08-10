@@ -7,12 +7,12 @@ export default function Header() {
 
   const handleMenuClick = () => {
     navigate("/");
-  };
+  };//<손주ai> 누르면 홈화면 이동
 
   return (
-    <div className="flex justify-between items-center p-4"
+    <div className="flex justify-between items-center px-5"
       style={{ backgroundImage: `url("${headersvg}")`, height: "119px" }}>
-      <header onClick={handleMenuClick} className="text-[33px] font-logo font-bold cursor-pointer">
+      <header onClick={handleMenuClick} className="text-[33px] font-logo cursor-pointer">
         손주AI
       </header>
       <button className="bg-transparent border-none">
