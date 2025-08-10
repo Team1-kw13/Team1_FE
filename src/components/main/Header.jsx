@@ -10,7 +10,7 @@ export default function Header() {
   };//<손주ai> 누르면 홈화면 이동
 
   return (
-    <div className="flex justify-between items-center px-5"
+    <div className="flex justify-between items-center px-[24px]"
       style={{ backgroundImage: `url("${headersvg}")`, height: "119px" }}>
       <header onClick={handleMenuClick} className="text-[33px] font-logo cursor-pointer">
         손주AI
