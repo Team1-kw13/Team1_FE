@@ -6,7 +6,7 @@ function App() {
 
   return (
     <Router>
-      <div className='container min-w-[430px] mx-auto'>
+      <div className='container max-w-[430px] max-h-[932px]'>
         <Routes>
           <Route path="/" element={<Page />} />
           <Route path="/chatroompage" element={<ChatRoomPage />} />
