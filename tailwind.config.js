@@ -9,6 +9,7 @@ export default {
         gray200: "#ECECEC",
         gray300: "#D9D9D9",
         gray400: "#8A8A8A",
+        gray500: "#3E3E3E",
     },
       fontFamily: {
         big: ['"Kakao Big Sans"', 'sans-serif'],
