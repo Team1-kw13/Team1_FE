@@ -48,7 +48,7 @@ export default function MicButton() {
     };
     
   return (
-    <button onClick={handleMicClick} className="flex items-center bg-yellow p-4 text-[28px] font-bold rounded-[100px] border-[3px] border-white hover:border-yellow">
+    <button onClick={handleMicClick} className="flex gap-[10px] items-center bg-yellow px-[37px] py-[24px] text-[28px] font-bold rounded-[100px] border-[3px] border-white hover:border-yellow">
       <img src={isListening ? stopIcon : micIcon} alt="Mic Icon" className="w-6 h-6" />
       {isListening ? "인식중" : "말하기"}
     </button>
