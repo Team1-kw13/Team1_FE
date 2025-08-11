@@ -4,12 +4,16 @@ import Header from "../../components/main/Header";
 
 export default function ChatRoomPage() {
   return (
-    <div className="flex flex-col justify-between h-screen relative">
-      <Header />
-      <div className="flex-1 overflow-auto">
+    <div className="h-screen relative">
+      <div className="fixed top-0 w-full max-w-[430px] z-10">
+        <Header />
+      </div>
+      <div className="flex-1 overflow-hidden">
         <ChatRoom />
       </div>
-      <BottomNav />
+      <div className="fixed bottom-0 w-full max-w-[430px] z-10 bottom-nav">
+        <BottomNav />
+      </div>
     </div>
   )
 }
