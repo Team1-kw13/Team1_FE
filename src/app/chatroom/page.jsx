@@ -4,13 +4,24 @@ import Header from "../../components/main/Header";
 
 export default function ChatRoomPage() {
   return (
-    <div className="h-screen relative">
-      <div className="fixed top-0 w-full max-w-[430px]">
+    <div className="flex flex-col h-screen">
+      <div className="fixed top-0 w-full max-w-[430px] z-20">
         <Header />
       </div>
-      <div className="flex-1 overflow-hidden">
+      
+      <div className="flex-1 overflow-x-hidden overflow-y-auto relative z-30
+                      mt-[90px] mb-[120px]"
+           style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}>
+        <style>
+          {`
+            ::-webkit-scrollbar {
+              display: none;
+            }
+          `}
+        </style>
         <ChatRoom />
       </div>
+
       <div className="fixed bottom-0 w-full max-w-[430px] bottom-nav">
         <BottomNav />
       </div>

@@ -1,6 +1,6 @@
 export default function Call({ communityCenter, number = "02-1234-5678" }) {
     return (
-        <div className="w-full h-full m-4">
+        <div className="w-full h-full p-4">
             <div className="text-[24px] font-bold">{communityCenter} 전화번호는<br/>{number} 입니다.<br/>전화 연결을 원하시면 아래 버튼을 눌러<br/>주세요.</div>
             <button className="font-bold text-[22px] w-[176px] h-[66px] bg-gray200 rounded-[10px] gap-[10px] mt-[22px] cursor-pointer">전화 연결</button>
         </div>
