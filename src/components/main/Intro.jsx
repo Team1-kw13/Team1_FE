@@ -14,7 +14,9 @@ export default function Intro() {
         </div>  
         <div class="font-big font-bold text-[18px]">노원구 주민들을 위한<br></br>AI 민원 음성 안내 서비스</div>
       </div>
-      <div class="flex justify-end pr-[16px] mt-[-32px]"><img src={Sun} alt="sun"></img></div>
+      <div class="flex justify-end pr-[16px] mt-[-32px]">
+        <img src={Sun} alt="sun"></img>
+      </div>
     </div>
     </>
   )
