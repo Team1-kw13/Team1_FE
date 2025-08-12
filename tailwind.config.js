@@ -9,6 +9,7 @@ export default {
         gray200: "#ECECEC",
         gray300: "#D9D9D9",
         gray400: "#8A8A8A",
+        gray450: "#484C52",
         gray500: "#3E3E3E",
     },
       fontFamily: {
