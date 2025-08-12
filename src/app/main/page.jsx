@@ -5,7 +5,7 @@ import BottomNav from "../../components/main/BottomNav"
 
 export default function Page() {
   return (
-    <div className="flex flex-col justify-between min-h-screen">
+    <div className="flex flex-col justify-between max-h-screen w-[430px]">
       <Header />
       <Intro />
       <ServiceButtons />
