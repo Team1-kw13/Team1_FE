@@ -13,7 +13,7 @@ export default function ChatRoom() {
       <div className="flex-shrink-0 flex items-center justify-center pt-[25px]">
         <div className="font-small font-light text-[13px] text-gray400 pb-[27px]">AI가 생성한 응답입니다. 중요한 정보는 꼭 확인해주세요.</div>
       </div>
-      <div className="flex-1 overflow-y-auto pb-[90px]">
+      <div className="flex-1 overflow-y-auto pb-[90px] w-full">
         <UserBubble text="우왕 성공이다. 이거 컴포넌트 설정해놔서 알아서 늘어났다가 줄어들었다가 함 루룰" />
         <UserBubble text="등본 떼줘" />
         <UserBubble text="..." />
