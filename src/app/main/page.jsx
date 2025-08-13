@@ -5,7 +5,6 @@ import ServicingSun from "../../components/main/ServicingSun"
 import ServiceButtons from "../../components/main/ServiceButtons"
 import Servicing from "../../components/main/Servicing"
 import BottomNav from "../../components/main/BottomNav"
-import ServiceComplete from "../../components/main/ServiceComplete"
 
 export default function Page() {
   const [listeningStatus, setListeningStatus] = useState("idle");
