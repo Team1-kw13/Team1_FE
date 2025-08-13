@@ -9,8 +9,8 @@ export default function ChatRoomPage() {
         <Header />
       </div>
       
-      <div className="flex-1 overflow-x-hidden overflow-y-auto relative z-30
-                      mt-[90px] mb-[120px]"
+      <div className="flex-1 overflow-hidden relative z-30
+                      mt-[89.37px] mb-[130px] w-full"
            style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}>
         <style>
           {`
