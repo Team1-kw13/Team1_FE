@@ -7,7 +7,7 @@ export default function ServiceButtons() {
       <div className="flex gap-[4px] mb-[19px] ml-[20px]">
         <img src={Mike} alt="mike" ></img>
         <header className="font-big font-bold text-[28px]">
-          무엇을도와드릴까요?
+          무엇을 도와드릴까요?
         </header>
       </div>
 
@@ -17,14 +17,14 @@ export default function ServiceButtons() {
             to='./chatroompage' 
             key={i} 
             className="w-fit h-[40px] text-[22px] font-big font-bold text-gray500 
-                      bg-gray200 p-[5px] rounded-lg cursor-pointer hover:text-inherit">
+                      bg-gray200 p-[5px] rounded-lg cursor-pointer">
             {content}
           </Link>
         ))}
       </div>
 
       <header className='text-[24px] font-small text-gray400 font-light mt-[83px] text-center'>
-        시작하기를 누르고 말씀해주세요!
+        말하기를 누르고 말씀해주세요!
       </header>
     </div>
   )

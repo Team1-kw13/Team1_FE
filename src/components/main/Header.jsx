@@ -12,7 +12,7 @@ export default function Header() {
   return (
     <div className="flex justify-between items-center px-[24px]"
       style={{ backgroundImage: `url("${headersvg}")`, height: "119px" }}>
-      <header onClick={handleMenuClick} className="text-[33px] font-logo cursor-pointer">
+      <header onClick={handleMenuClick} className="text-[33px] font-logo cursor-pointer text-[#302200]">
         손주AI
       </header>
       <button className="bg-transparent border-none">
