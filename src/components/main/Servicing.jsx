@@ -1,5 +1,4 @@
 import {useState,useEffect} from "react"
-import listening from "../../assets/images/listening.svg"
 import Wave1 from "../../assets/images/Voice_Wave1.svg"
 import Wave2 from "../../assets/images/Voice_Wave2.svg"
 import Wave3 from "../../assets/images/Voice_Wave3.svg"
@@ -22,21 +21,16 @@ export default function Servicing({isListening}){
     },[isListening]);
 
     return (
-        <div className="flex flex-col items-center bg-gray100">
-        {/* 인식된 텍스트 */}
-        {isListening ? (
-            <img src={listening} className="w-[45px] h-[11px] mt-[36px]" />
-        ) : (
-            <div className="text-[28px] font-bold font-big mt-[18px]">
-            {recognizedText}
+        <div className="flex flex-col gap-[36px] items-center bg-gray100">
+            {/* 인식된 텍스트 */}
+            <div className="text-[28px] font-big font-bold mt-[18px]">
+                {recognizedText || "..." }
             </div>
-        )}
-
-        <img src={waves[waveIndex]} alt="voice wave" />
-        
-        <div className="font-small font-light text-[17px] text-gray400 mb-[32px]">
-            {isComplete ? "인식 완료했습니다" : "인식 중 입니다"}
-        </div>
+            <img src={waves[waveIndex]} alt="voice wave" />
+            
+            <div className="font-small font-light text-[17px] text-gray400 mb-[32px]">
+                {isComplete ? "인식 완료! 채팅창에서 안내할게요!" : "인식 중 입니다"}
+            </div>
         </div>
     );
 }
