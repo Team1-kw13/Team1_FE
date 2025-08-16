@@ -11,7 +11,7 @@ export default function BottomNav() {
   };//<홈> 누르면 홈화면 이동
 
   return (
-    <div className="bg-gray100 h-[139px] pt-[17.5px] pb-[30.5px]">
+    <div className="bg-gray100 h-[139px] pt-[18px] pb-[32px]">
       <nav className="flex justify-between">
         <div className="flex flex-col items-center gap-[6px] pl-[53px] pt-[46px]">
           <button onClick={handleMenuClick}>
@@ -24,7 +24,7 @@ export default function BottomNav() {
         <MicButton></MicButton>
         <div className="flex flex-col items-center gap-[6px] pr-[47.25px] pt-[46px]">
           <button>
-            <img src={userImage} alt="내정보" className="w-[24px] h-[24px]" />
+            <img src={userImage} alt="내 정보" className="w-[24px] h-[24px]" />
           </button>
           <div className="text-center text-[12px] font-big font-bold text-gray450">
             내정보
