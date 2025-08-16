@@ -3,18 +3,18 @@ import Sun from "../../assets/images/sun.svg"
 export default function Intro() {
   return (
     <>
-    <div class="h-[455px] bg-gray100" style={{backgroundImage: `url(${GradientBackground})`}}>
-      <div class="pl-[46px]">
-        <div class="font-big font-extrabold text-[37px] pb-[10px]">
+    <div className="h-[455px] bg-gray100" style={{backgroundImage: `url(${GradientBackground})`}}>
+      <div className="pl-[46px]">
+        <div className="font-big font-extrabold text-[37px] pb-[10px]">
           <header>반가워요</header>
-          <div class="flex mt-[-10px]">
-            <header class="text-yellow">손주AI</header>
+          <div className="flex mt-[-10px]">
+            <header className="text-yellow">손주AI</header>
             <header>&nbsp;에요!</header>
           </div>
         </div>  
-        <div class="font-big font-bold text-[18px]">노원구 주민들을 위한<br></br>AI 민원 음성 안내 서비스</div>
+        <div className="font-big font-bold text-[18px]">노원구 주민들을 위한<br></br>AI 민원 음성 안내 서비스</div>
       </div>
-      <div class="flex justify-end pr-[16px] mt-[-32px]">
+      <div className="flex justify-end pr-[16px] mt-[-32px]">
         <img src={Sun} alt="sun"></img>
       </div>
     </div>
