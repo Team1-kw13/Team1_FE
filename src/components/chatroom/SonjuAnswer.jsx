@@ -18,7 +18,7 @@ export default function SonjuAnswer({ text }) {
   }, [text]);
 
   return (
-    <div className="flex justify-center items-center mt-[12px] ml-[24px] mr-[24px]">
+    <div className="flex justify-center items-center mt-[12px] mx-[24px]">
       <div className="font-bold text-[24px]">
         {displayText}
       </div>
