@@ -179,7 +179,7 @@ export default function MicButton({ onListeningStart, onListeningStop, currentSt
   return (
     <button 
       onClick={handleMicClick} 
-      className={`flex gap-[10px] items-center px-[37px] py-[24px] text-[28px] font-bold w-[195px] h-[91px] rounded-[100px] border-[3px] border-white bg-yellow
+      className={`flex items-center px-[37px] py-[24px] text-[28px] font-bold w-[195px] h-[91px] rounded-[100px] border-[3px] border-white bg-yellow
         ${isActive 
           ? 'shadow-[0_0_80px_0_yellow]' //drop shadow 적용 
           : ''
@@ -189,7 +189,7 @@ export default function MicButton({ onListeningStart, onListeningStop, currentSt
       <img 
         src={isActive ? stopIcon : micIcon} 
         alt="Mic Icon" 
-        className="w-6 h-6" 
+        className={isActive?"w-[15px] h-[15px] mr-[18px]":"w-[32px] h-[32px] mr-[4.5px]"}
       />
       {currentStep === 'processing' ? '인식중' : (isActive ? '인식중' : '말하기')}
     </button>
