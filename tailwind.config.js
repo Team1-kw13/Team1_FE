@@ -17,14 +17,28 @@ export default {
         small: ['"Kakao Small Sans"', 'sans-serif'],
         logo: ['"Ownglyph PDH"', 'sans-serif'],
       },
+      keyframes:{
+        fadeUp:{
+          "0%":{opacity:"0",transform:"translateY(20px)"},
+          "100%":{opacity:"1",transform:"translateX(0)"},
+        },
+      },
       animation: {
         gradient: 'gradientMove 0.8s ease-in-out forwards',
+        fadeUp:"fadeUp 0.8s ease-out forwards",
       },
       backgroundSize: {
         '200%': '200% 200%',
       }
     },
   },
-  plugins: [],
+  plugins: [
+    function({addUtilities}){
+      addUtilities({
+        '.animation-delay-400':{'animation-delay':'400ms'},
+        '.animation-delay-600':{'animation-delay':'600ms'},
+      })
+    }
+  ],
 }
 

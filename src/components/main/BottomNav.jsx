@@ -37,7 +37,7 @@ export default function BottomNav({ onListeningStart, onListeningStop, currentSt
 
         <div onClick={handleUserInfoClick} className="flex flex-col items-center gap-[6px] pr-[47.25px] pt-[46px]">
           <button>
-            <img src={userImage} alt="내정보" className="w-[24px] h-[24px]" />
+            <img src={userImage} alt="내 정보" className="w-[24px] h-[24px]" />
           </button>
           <div className="text-center text-[12px] font-big font-bold text-gray450">
             내 정보
