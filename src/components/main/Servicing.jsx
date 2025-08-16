@@ -43,7 +43,6 @@ export default function Servicing({isComplete,recognizedText}){
         }
     },[recognizedText,navigate])
     */}
-    
 
     return (
         <div className="flex flex-col gap-[36px] items-center bg-gray100">

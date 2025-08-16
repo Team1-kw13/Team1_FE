@@ -27,4 +27,4 @@ export default function ServiceButtons() {
       </header>
     </div>
   )
-}/*카드일까 버튼일까*/
+}
