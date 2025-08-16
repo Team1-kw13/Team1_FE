@@ -179,9 +179,9 @@ export default function MicButton({ onListeningStart, onListeningStop, currentSt
   return (
     <button 
       onClick={handleMicClick} 
-      className={`flex gap-[10px] items-center px-[37px] py-[24px] text-[28px] font-bold w-[195px] h-[91px] rounded-[100px] border-[3px] bg-yellow
+      className={`flex gap-[10px] items-center px-[37px] py-[24px] text-[28px] font-bold w-[195px] h-[91px] rounded-[100px] border-[3px] border-white bg-yellow
         ${isActive 
-          ? '' //drop shadow 적용 
+          ? 'shadow-[0_0_80px_0_yellow]' //drop shadow 적용 
           : ''
         }`}
       disabled={currentStep === 'processing'} // 처리 중일 때는 비활성화
