@@ -23,7 +23,7 @@ export default function Servicing({isComplete,recognizedText}){
         <div className="flex flex-col gap-[36px] items-center bg-gray100">
             {/* 인식된 텍스트 */}
             <div className="text-[28px] font-big font-bold mt-[18px]">
-                {recognizedText || "..." }
+                {recognizedText ? recognizedText : "..." }
             </div>
 
             <img src={waves[waveIndex]} alt="voice wave" />
