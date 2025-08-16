@@ -172,7 +172,9 @@ function off(channelOrType, typeOrHandler, handler) {
 }
 
 // 메시지 전송
-function send(channel, type, data = {}) {
+//서버가 요구하는 type, data형태로만 전송하기xxxx
+//payload를 평평하게 보내기?
+function send(type, payload = {}) {
   if (!ws || !isConnected) {
     console.error('❌ WebSocket이 연결되지 않음. 현재 상태:', { 
       wsExists: !!ws, 
@@ -182,16 +184,14 @@ function send(channel, type, data = {}) {
     return false;
   }
   
-  const message = {
-    channel: channel,
-    type: type,
-    ...data
-  };
+  
+  const message = Object.keys(payload||{}).length
+    ?{type,...payload}  //평평하게 보냄
+    :{type};
   
   try {
     console.log('📤 메시지 전송:', message);
     ws.send(JSON.stringify(message));
-    return true;
   } catch (error) {
     console.error('❌ 메시지 전송 실패:', error);
     return false;
@@ -201,31 +201,27 @@ function send(channel, type, data = {}) {
 // === 대화 관련 함수들 ===
 function startSpeaking() {
   console.log('🎤 음성 발화 시작');
-  return send('openai:conversation', 'input_audio_buffer.commit');
+  return send('input_audio_buffer.commit');
 }
 
-function sendAudio(base64AudioData) {
-  return send('openai:conversation', 'input_audio_buffer.append', {
-    audio_buffer: base64AudioData
-  });
+// PCM16 ArrayBuffer(또는 Int16Array.buffer)를 그대로 보냄?
+function sendAudioPCM16(arrayBuffer) {
+  if (!ws || ws.readyState !== WebSocket.OPEN) return false;
+  try { ws.send(arrayBuffer); return true; } catch (e) { console.error(e); return false; }
 }
 
 function stopSpeaking() {
   console.log('🛑 음성 발화 종료');
-  return send('openai:conversation', 'input_audio_buffer.end');
+  return send('input_audio_buffer.end');
 }
 
 function sendText(text) {
   console.log('📝 텍스트 전송:', text);
-  return send('openai:conversation', 'input_text', {
-    text: text
-  });
+  return send('input_text', {text});
 }
 
 function selectPrePrompt(option) {
-  return send('openai:conversation', 'preprompted', {
-    enum: option
-  });
+  return send('preprompted', {enum: option});
 }
 
 function requestSummary() {
@@ -284,7 +280,7 @@ const webSocketService = {
   
   // 대화 관련
   startSpeaking: startSpeaking,
-  sendAudio: sendAudio,
+  sendAudioPCM16,
   stopSpeaking: stopSpeaking,
   sendText: sendText,
   selectPrePrompt: selectPrePrompt,
