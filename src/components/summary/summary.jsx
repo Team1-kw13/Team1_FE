@@ -8,6 +8,7 @@ import webSocketService from "../../service/websocketService";
 export default function Summary() {
   const [summaryImage, setSummaryImage] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [showPopup,setShowPopup]=useState(false);
 
   useEffect(() => {
     if (!webSocketService.isConnected) {
@@ -39,6 +40,22 @@ export default function Summary() {
     };
   }, []);
 
+  const handleSave=()=>{
+    if(!summaryImage) return;
+
+    //버튼 누르면 a태그를 임시로 만들어서 다운로드 하게끔
+    const link=document.createElement("a");
+    link.href=summaryImage;
+    link.download="summary.png";
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+
+    //팝업표시
+    setShowPopup(true);
+    setTimeout(()=>setShowPopup(false),3000);
+  }
+
   return (
     <div className="flex flex-col rounded-tl-[30px] rounded-tr-[30px] w-full max-w-[430px] h-full relative z-30 bg-gray100"
          style={{ boxShadow: "0 4px 10px 0px rgba(0, 0, 0, 0.15)" }}>
@@ -52,9 +69,20 @@ export default function Summary() {
         {/* 로딩 실패시 메시지 필요하면 여기에 !isLoading과 함께 제시 */} 
         <div className="flex flex-row justify-between mx-[25.25px] mt-[12px]">
           <button className="w-[176px] h-[66px] bg-gray200 font-bold text-[22px] px-[46px] py-[16.5px] rounded-[10px] gap-[10px]">다시하기</button>
-          <button className="w-[176px] h-[66px] bg-yellow font-bold text-[22px] text-white px-[46px] py-[16.5px] rounded-[10px] gap-[10px]">저장하기</button>
+          <button 
+            onClick={handleSave}
+            className="w-[176px] h-[66px] bg-yellow font-bold text-[22px] text-white px-[46px] py-[16.5px] rounded-[10px] gap-[10px]"
+          >
+            저장하기
+          </button>
         </div>
       </div>
+
+      {/*저장완료 팝업 디자인 나오면 수정하기*/}
+      {showPopup&&(
+        <div>저장완료</div>
+      )}
+
     </div>
   );
 }
