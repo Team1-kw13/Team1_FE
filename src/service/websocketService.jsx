@@ -4,7 +4,10 @@ let isConnected = false;
 let isConnecting = false;
 let messageHandlers = {};
 let connectionAttempts = 0;
+let sessionReady=false;
+let readyWaiters=[];
 const maxConnectionAttempts = 3;
+const CHANNEL='openai:conversation';
 
 // WebSocket 연결
 function connect(url = import.meta.env.VITE_WEBSOCKET_URL) {
@@ -38,6 +41,7 @@ function connect(url = import.meta.env.VITE_WEBSOCKET_URL) {
   return new Promise((resolve, reject) => {
     try {
       ws = new WebSocket(url);
+      ws.binaryType='arraybuffer';
       
       ws.onopen = function() {
         console.log('✅ WebSocket 연결 성공');
@@ -90,6 +94,12 @@ function connect(url = import.meta.env.VITE_WEBSOCKET_URL) {
 // 메시지 처리
 function handleMessage(data) {
   const { channel, type } = data;
+
+    // 서버 에러 패킷 처리 (type 없이 옴)
+  if (channel === 'openai:error') {
+    console.error('🛑 서버 오류:', data.code, data.message);
+    return;
+  }
   
   let handlerKey;
   if (channel && type) {
@@ -186,8 +196,8 @@ function send(type, payload = {}) {
   
   
   const message = Object.keys(payload||{}).length
-    ?{type,...payload}  //평평하게 보냄
-    :{type};
+    ?{channel:CHANNEL,type,...payload}  //평평하게 보냄
+    :{channel:CHANNEL,type};
   
   try {
     console.log('📤 메시지 전송:', message);
@@ -204,10 +214,9 @@ function startSpeaking() {
   return send('input_audio_buffer.commit');
 }
 
-// PCM16 ArrayBuffer(또는 Int16Array.buffer)를 그대로 보냄?
-function sendAudioPCM16(arrayBuffer) {
-  if (!ws || ws.readyState !== WebSocket.OPEN) return false;
-  try { ws.send(arrayBuffer); return true; } catch (e) { console.error(e); return false; }
+function sendAudio(base64AudioData) {
+  // 이 서버는 channel + JSON을 요구하니 base64를 최상위 audio_buffer로 보냄
+  return send('input_audio_buffer.append', { audio_buffer: base64AudioData });
 }
 
 function stopSpeaking() {
@@ -223,6 +232,7 @@ function sendText(text) {
 function selectPrePrompt(option) {
   return send('preprompted', {enum: option});
 }
+
 
 function requestSummary() {
   if (!ws || !isConnected) {
@@ -280,7 +290,7 @@ const webSocketService = {
   
   // 대화 관련
   startSpeaking: startSpeaking,
-  sendAudioPCM16,
+  sendAudio,
   stopSpeaking: stopSpeaking,
   sendText: sendText,
   selectPrePrompt: selectPrePrompt,
@@ -301,3 +311,8 @@ const webSocketService = {
 };
 
 export default webSocketService;
+
+//서버가 READY될때까지 기다렸다가 commit보냄
+export function waitReady() {
+  return sessionReady ? Promise.resolve() : new Promise(r => readyWaiters.push(r));
+}

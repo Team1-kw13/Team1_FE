@@ -48,7 +48,8 @@ async function startAudioRecognition(onAudioData) {
     const pcmBuffer = float32ToInt16(inputData);
     
     // 콜백으로 오디오 데이터 전달
-    onAudioData?.(pcmBuffer.buffer);
+    const base64=arrayBufferToBase64(pcmBuffer.buffer);// PCM16을 Base64로
+    onAudioData?.(base64);//json audio_buffer로 전송
   };
   
   return { stream, audioContext, processor };
@@ -132,7 +133,9 @@ export default function MicButton({ onListeningStart, onListeningStop, currentSt
         webSocketService.connect(import.meta.env.VITE_WEBSOCKET_URL);
         await new Promise(resolve => setTimeout(resolve, 1000));
       }
-
+      
+      //서버가 CONNECTED 보낼 때까지 대기 
+      await webSocketService.waitReady();
       setIsRecording(true);
       
       // 부모 컴포넌트에 녹음 시작 알림
@@ -142,8 +145,9 @@ export default function MicButton({ onListeningStart, onListeningStop, currentSt
       webSocketService.startSpeaking();
 
       // 오디오 녹음 시작
-      const audioSystem = await startAudioRecognition((arrayBuffer) => {
-        webSocketService.sendAudioPCM16(arrayBuffer);
+      const audioSystem = await startAudioRecognition((base64Data) => {
+        webSocketService.sendAudio(base64Data);
+        // {channel, type:'input_audio_buffer.append', audio_buffer: base64}
       });
       
       audioSystemRef.current = audioSystem;
