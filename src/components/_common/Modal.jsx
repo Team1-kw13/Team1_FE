@@ -42,7 +42,7 @@ export default function Modal({
 
   return (
     <div 
-      className={`fixed inset-0 z-50 flex items-center justify-center max-w-[430px] max-h-[932px] mx-auto ${overlayClassName}`}
+      className={`fixed inset-0 z-50 flex items-center justify-center max-w-[430px] h-screen mx-auto ${overlayClassName}`}
       onClick={handleOverlayClick}
     >
       {/* 배경 오버레이 */}
