@@ -174,7 +174,7 @@ function off(channelOrType, typeOrHandler, handler) {
 // 메시지 전송
 //서버가 요구하는 type, data형태로만 전송하기xxxx
 //payload를 평평하게 보내기?
-function send(type, payload = {}) {
+function send(channel, type, payload = {}) {
   if (!ws || !isConnected) {
     console.error('❌ WebSocket이 연결되지 않음. 현재 상태:', { 
       wsExists: !!ws, 
@@ -185,9 +185,11 @@ function send(type, payload = {}) {
   }
   
   
-  const message = Object.keys(payload||{}).length
-    ?{type,...payload}  //평평하게 보냄
-    :{type};
+  const message = {
+    channel,
+    type,
+    ...payload
+  };
   
   try {
     console.log('📤 메시지 전송:', message);
@@ -201,7 +203,7 @@ function send(type, payload = {}) {
 // === 대화 관련 함수들 ===
 function startSpeaking() {
   console.log('🎤 음성 발화 시작');
-  return send('input_audio_buffer.commit');
+  return send('openai:conversation', 'input_audio_buffer.commit');
 }
 
 // PCM16 ArrayBuffer(또는 Int16Array.buffer)를 그대로 보냄?
@@ -212,16 +214,16 @@ function sendAudioPCM16(arrayBuffer) {
 
 function stopSpeaking() {
   console.log('🛑 음성 발화 종료');
-  return send('input_audio_buffer.end');
+  return send('openai:conversation', 'input_audio_buffer.end');
 }
 
 function sendText(text) {
   console.log('📝 텍스트 전송:', text);
-  return send('input_text', {text});
+  return send('openai:conversation', 'input_text', {text});
 }
 
 function selectPrePrompt(option) {
-  return send('preprompted', {enum: option});
+  return send('openai:conversation', 'preprompted', {enum: option});
 }
 
 function requestSummary() {
