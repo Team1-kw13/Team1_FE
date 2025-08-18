@@ -53,7 +53,6 @@ export default function Summary() {
 
     //팝업표시
     setShowPopup(true);
-    setTimeout(()=>setShowPopup(false),3000);
   }
 
   return (
@@ -65,7 +64,7 @@ export default function Summary() {
       <div className="flex-1 overflow-y-auto pb-[90px] w-full max-w-[430px] relative">
         <UserBubble text="민원 내용 요약" />
         <SonjuSummary isLoading={isLoading} />
-        {summaryImage && (<img src={summaryImage} alt="Summary" className="w-[385px] h-[180px]" />)}
+        {summaryImage && (<img src={summaryImage} alt="Summary" className="w-[385px] h-[180px] border-[1px] border-gray300 mx-auto my-[12px]" />)}
         {/* 로딩 실패시 메시지 필요하면 여기에 !isLoading과 함께 제시 */} 
         <div className="flex flex-row justify-between mx-[25.25px] mt-[12px]">
           <button className="w-[176px] h-[66px] bg-gray200 font-bold text-[22px] px-[46px] py-[16.5px] rounded-[10px] gap-[10px]">다시하기</button>
@@ -76,12 +75,11 @@ export default function Summary() {
             저장하기
           </button>
         </div>
+        
+        {showPopup&&(<div className="font-bold text-[24px] pt-[28px] px-[25px]">저장 완료! 사진첩에서 확인해보세요.</div>)}
       </div>
 
-      {/*저장완료 팝업 디자인 나오면 수정하기*/}
-      {showPopup&&(
-        <div>저장완료</div>
-      )}
+
 
     </div>
   );
