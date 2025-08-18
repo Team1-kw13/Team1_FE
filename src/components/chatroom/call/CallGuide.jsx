@@ -11,7 +11,7 @@ export default function Call({ communityCenter, number = "02-1234-5678" }) {
                 <button
                     onClick={handleCall}
                     className="font-bold text-[22px] w-[176px] h-[66px] bg-gray200 rounded-[10px] gap-[10px] mt-[22px] cursor-pointer">
-                    전화 연결
+                    전화하기
                 </button>
             </div>
         </div>
