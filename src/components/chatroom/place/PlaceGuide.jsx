@@ -36,8 +36,7 @@ export default function Place({ communityCenter }) {
                  style={{wordBreak:'keep-all'}}>
               사용자님의 위치에서<br /> 가장 가까운 동사무소는,<br />"{communityCenter}"입니다.</div>
             <div className="flex flex-row justify-start gap-[30px] mt-[12px]">
-                <PlaceMap officeInfo={officeInfo}/>        
-                <PlaceMap />
+                <PlaceMap officeInfo={officeInfo}/>
             </div>
         </div>
         <Recommend text="가까운 동사무소 알려줘" />       
