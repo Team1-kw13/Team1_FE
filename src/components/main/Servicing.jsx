@@ -32,17 +32,20 @@ export default function Servicing({isComplete,recognizedText}){
         }
     },[isComplete,navigate]);
 
-    {/*
-    텍스트 추출 후 3초뒤 챗룸으로 이동 but! 텍스트 추출 아직 안됨
+    /* 텍스트 인식 완료 후 3초 뒤 채팅창 이동 */
     useEffect(()=>{
-        if(recognizedText){
+        if(isComplete && recognizedText){
             const timer=setTimeout(()=>{
-                navigate("/chatroompage");
+                navigate("/chatroompage",{
+                    state: {
+                        userMessage: recognizedText,
+                        timestamp: Date.now()
+                    }
+                });
             },3000);
             return ()=>clearTimeout(timer);
         }
-    },[recognizedText,navigate])
-    */}
+    },[isComplete,recognizedText,navigate]);
 
     return (
         <div className="flex flex-col gap-[36px] items-center bg-gray100">

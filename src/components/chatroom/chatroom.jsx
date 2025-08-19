@@ -8,7 +8,7 @@ import SonjuListening from "./SonjuListening";
 import UserBubble from "./UserBubble";
 import webSocketService from "../../service/websocketService";
 
-export default function ChatRoom() {
+export default function ChatRoom({ initialUserMessage }) {
   const [messages, setMessages] = useState([]);
   const [isAiResponding, setIsAiResponding] = useState(false);
   const [currentAiResponse, setCurrentAiResponse] = useState('');
@@ -85,6 +85,18 @@ export default function ChatRoom() {
       webSocketService.off('openai:error', handleError);
     };
   }, [currentAiResponse]);
+
+  useEffect(() => {
+    if (initialUserMessage) {
+      setMessages(prev => [...prev, {
+        type: 'user',
+        content: initialUserMessage,
+        timestamp: new Date()
+      }]);
+
+      webSocketService.sendText(initialUserMessage);
+    }
+  }, [initialUserMessage]);
 
   // 제안 질문 클릭 처리
   const handleQuestionClick = (question) => {

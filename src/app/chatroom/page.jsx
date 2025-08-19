@@ -1,8 +1,19 @@
+import { useEffect } from "react";
+import { useLocation } from "react-router-dom";
 import ChatRoom from "../../components/chatroom/chatroom";
 import BottomNav from "../../components/main/BottomNav";
 import Header from "../../components/main/Header";
 
 export default function ChatRoomPage() {
+  const location = useLocation();
+
+  useEffect(() => {
+    if (location.state?.userMessage) {
+      const userMessage = location.state.userMessage;
+      console.log("사용자 음성 인식 결과:", userMessage);
+    }
+  }, [location.state]);
+
   return (
     <div className="flex flex-col h-screen w-full max-w-[430px]">
       <Header />
@@ -16,7 +27,7 @@ export default function ChatRoomPage() {
             }
           `}
         </style>
-        <ChatRoom />
+        <ChatRoom initialUserMessage={location.state?.userMessage} />
       </div>
 
       <BottomNav />

@@ -5,7 +5,13 @@ import homeMenuImage from "../../assets/images/home-menu.svg";
 import userImage from "../../assets/images/user.svg";
 import ServicePreparingModal from "../_common/ServicePreparing.jsx";
 
-export default function BottomNav({ onListeningStart, onListeningStop, currentStep }) {
+export default function BottomNav({ 
+  onListeningStart, 
+  onListeningStop, 
+  onTranscriptUpdate,
+  onRecognitionError,
+  currentStep 
+}) {
   const navigate = useNavigate();
   const [isModalOpen, setIsModalOpen] = useState(false);
 
@@ -32,6 +38,8 @@ export default function BottomNav({ onListeningStart, onListeningStop, currentSt
         <MicButton 
           onListeningStart={onListeningStart}
           onListeningStop={onListeningStop}
+          onTranscriptUpdate={onTranscriptUpdate}
+          onRecognitionError={onRecognitionError}
           currentStep={currentStep}
         />
 
