@@ -10,7 +10,7 @@ export default function ServiceButtons() {
           무엇을 도와드릴까요?
         </header>
       </div>
-      <div className="flex gap-[29px] mx-[30px]">
+      <div className="flex justify-between gap-[29px] mx-[30px]">
         {["무더위 쉼터", "동사무소", "등본 발급"].map((content,i)=>(
           <Link 
             to='./chatroompage' 
