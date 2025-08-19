@@ -152,7 +152,7 @@ function on(channelOrType, typeOrHandler, handler) {
   // 중복 핸들러 방지
   if (!messageHandlers[key].includes(handlerFunction)) {
     messageHandlers[key].push(handlerFunction);
-    console.log('📝 핸들러 등록:', key);
+//    console.log('📝 핸들러 등록:', key);
   } else {
     console.log('⚠️ 이미 등록된 핸들러:', key);
   }
@@ -178,7 +178,7 @@ function off(channelOrType, typeOrHandler, handler) {
     });
     
     if (messageHandlers[key].length < initialLength) {
-      console.log('🗑️ 핸들러 제거:', key);
+//      console.log('🗑️ 핸들러 제거:', key);
     }
   }
 }
@@ -216,7 +216,7 @@ function send(channel, type, payload = {}) {
 // === 대화 관련 함수들 ===
 function startSpeaking() {
   console.log('🎤 음성 발화 시작');
-  return send('openai:conversation', 'input_audio_buffer.commit');
+  return send('input_audio_buffer.commit');
 }
 
 // 사용자 음성 발화
@@ -349,7 +349,6 @@ const webSocketService = {
   startSpeaking: startSpeaking,
   sendAudioPCM16,
   stopSpeaking: stopSpeaking,
-  sendText: sendText,
   selectPrePrompt: selectPrePrompt,
   
   // 요약 관련
