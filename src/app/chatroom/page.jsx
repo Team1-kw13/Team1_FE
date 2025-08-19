@@ -1,18 +1,24 @@
-import { useEffect } from "react";
-import { useLocation } from "react-router-dom";
+import { useState } from "react";
 import ChatRoom from "../../components/chatroom/chatroom";
 import BottomNav from "../../components/main/BottomNav";
 import Header from "../../components/main/Header";
 
 export default function ChatRoomPage() {
-  const location = useLocation();
+  const [isListening, setIsListening] = useState(false);
+  const [voiceStarted, setVoiceStarted] = useState(0); // 🔥 숫자로 변경하여 변화 감지
+  const [voiceStopped, setVoiceStopped] = useState(0); // 🔥 숫자로 변경하여 변화 감지
 
-  useEffect(() => {
-    if (location.state?.userMessage) {
-      const userMessage = location.state.userMessage;
-      console.log("사용자 음성 인식 결과:", userMessage);
-    }
-  }, [location.state]);
+  const handleChatRoomVoiceStart = () => {
+    console.log('ChatRoomPage: 음성 인식 시작');
+    setIsListening(true);
+    setVoiceStarted(prev => prev + 1); // 🔥 값 변경으로 ChatRoom에 신호 전달
+  };
+
+  const handleChatRoomVoiceStop = () => {
+    console.log('ChatRoomPage: 음성 인식 중지');
+    setIsListening(false);
+    setVoiceStopped(prev => prev + 1); // 🔥 값 변경으로 ChatRoom에 신호 전달
+  };
 
   return (
     <div className="flex flex-col h-screen w-full max-w-[430px]">
@@ -27,10 +33,19 @@ export default function ChatRoomPage() {
             }
           `}
         </style>
-        <ChatRoom initialUserMessage={location.state?.userMessage} />
+        <ChatRoom 
+          isListening={isListening}
+          voiceStarted={voiceStarted}
+          voiceStopped={voiceStopped}
+        />
       </div>
 
-      <BottomNav />
+      <BottomNav 
+        isInChatRoom={true}
+        onListeningStart={handleChatRoomVoiceStart}
+        onListeningStop={handleChatRoomVoiceStop}
+        currentStep={isListening ? 'listening' : 'intro'}
+      />
     </div>
-  )
+  );
 }

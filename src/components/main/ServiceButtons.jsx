@@ -1,7 +1,13 @@
-import {Link} from 'react-router-dom';
+import {Link, useNavigate} from 'react-router-dom';
 import Mike from "../../assets/images/mic_fill.svg";
 
 export default function ServiceButtons() {
+  const navigate = useNavigate();
+
+  const handleServiceClick = (content) => {
+    navigate(`/chatroompage/${encodeURIComponent(content)}`);
+  };
+
   return (
     <div className="bg-gray100">
       <div className="flex gap-[4px] mb-[19px] ml-[20px] mt-[9px] mb-[20px]">
@@ -12,13 +18,12 @@ export default function ServiceButtons() {
       </div>
       <div className="flex justify-between gap-[29px] mx-[30px]">
         {["무더위 쉼터", "동사무소", "등본 발급"].map((content,i)=>(
-          <Link 
-            to='./chatroompage' 
+          <button onClick={() => handleServiceClick(content)} 
             key={i} 
             className="w-fit h-[40px] text-[22px] font-big font-bold text-gray500 
-                      bg-gray200 p-[5px] rounded-lg cursor-pointer">
+                      bg-gray200 p-[5px] rounded-lg">
             {content}
-          </Link>
+          </button> //Link -> Navigate 변경
         ))}
       </div>
 

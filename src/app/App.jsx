@@ -10,7 +10,7 @@ function App() {
       <div className='container flex items-center justify-center max-w-[430px] max-h-[932px] mx-auto'>
         <Routes>
           <Route path="/" element={<Page />} />
-          <Route path="/chatroompage" element={<ChatRoomPage />} />
+          <Route path="/chatroompage/:initialMessage?" element={<ChatRoomPage />} /> {/*라우팅 수정*/}
           <Route path="/summary" element={<SummaryPage />} />
         </Routes>
       </div>

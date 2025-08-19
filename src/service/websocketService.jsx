@@ -31,40 +31,41 @@ function connect(url = import.meta.env.VITE_WEBSOCKET_URL) {
     });
   }
 
-  console.log('🔌 WebSocket 연결 시도:', url);
-  isConnecting = true;
+  isConnecting = true; // 연결 시도 중 또는 연결 완료 상태 X -> 연결 시도
   connectionAttempts++;
 
   return new Promise((resolve, reject) => {
     try {
-      ws = new WebSocket(url);
+      ws = new WebSocket(url); // 소켓 연결
       
-      ws.onopen = function() {
+      ws.onopen = function() { // 소켓이 열림 = 연결 성공
         console.log('✅ WebSocket 연결 성공');
         isConnected = true;
         isConnecting = false;
-        connectionAttempts = 0;
+        connectionAttempts = 0; // 연결 성공 -> 연결 시도 횟수 초기화
         resolve();
       };
       
-      ws.onmessage = function(event) {
-        console.log('📩 메시지 받음:', event.data);
-        
-        try {
-          const data = JSON.parse(event.data);
-          handleMessage(data);
-        } catch (error) {
-          console.error('❌ 메시지 파싱 오류:', error);
+      ws.onmessage = function(event) { // 서버 -> 클라 메세지
+        if (typeof event.data === 'string') {
+            const message = JSON.parse(event.data);
+            console.log ("서버에서 받은 string type 메세지: ", message);
+            handleMessage(message);
+        } else if (typeof event.data instanceof Blob) {
+            console.log ("서버에서 받은 오디오(Blob) 메세지: ", event.data);
+            handleMessage({ type: '', data: event.data});
+        } else {
+            console.log ("서버에서 JSON, Blob 이외의 type 메세지 수신: ", event.data);
         }
       };
       
-      ws.onclose = function() {
+      ws.onclose = function() { // 소켓 연결 종료
         console.log('🔌 WebSocket 연결 종료');
         isConnected = false;
         isConnecting = false;
       };
       
-      ws.onerror = function(error) {
+      ws.onerror = function(error) { // 소켓 연결 오류
         console.error('❌ WebSocket 에러:', error);
         isConnected = false;
         isConnecting = false;
@@ -91,30 +92,41 @@ function connect(url = import.meta.env.VITE_WEBSOCKET_URL) {
 function handleMessage(data) {
   const { channel, type } = data;
   
-  let handlerKey;
-  if (channel && type) {
-    handlerKey = `${channel}:${type}`;
-  } else if (type && !channel) {
-    handlerKey = type;
-  } else {
+  // 유효성 체크
+  if (!type && !channel) {
     console.warn('알 수 없는 메시지 형식:', data);
     return;
   }
-  
-  console.log('🔄 메시지 처리:', handlerKey);
-  
-  // 등록된 핸들러가 있으면 실행
-  if (messageHandlers[handlerKey]) {
-    messageHandlers[handlerKey].forEach(function(handler) {
-      try {
-        handler(data);
-      } catch (error) {
-        console.error('핸들러 실행 오류:', error);
-      }
-    });
+
+  if( type && type.includes('transcript')) {
+    console.log('사용자 음성 인식 메세지' ,{channel, type, data});
   }
-  
-  // 서버 연결 확인 메시지 처리
+
+  // 1) 정확히 일치 (channel:type)
+  const keys = [];
+  if (channel && type) keys.push(`${channel}:${type}`);
+
+  // 2) 타입-only 리스너 (예: 'preprompted')까지 호출
+  if (type) keys.push(type);
+
+  // 3) 채널 와일드카드 (예: 'openai:conversation:*')까지 호출
+  if (channel) keys.push(`${channel}:*`);
+
+  // 등록된 핸들러 실행
+  keys.forEach((k) => {
+    const handlers = messageHandlers[k];
+    if (handlers && handlers.length) {
+      handlers.forEach((handler) => {
+        try { 
+            handler(data); 
+        } catch (error) { 
+            console.error('핸들러 실행 오류:', error); 
+        }
+      });
+    }
+  });
+
+  // 서버 연결 확인 메시지 처리 (기존 유지)
   if (type === 'CONNECTED') {
     console.log('✅ 서버 연결 확인:', data.data?.clientId);
   }
@@ -194,6 +206,7 @@ function send(channel, type, payload = {}) {
   try {
     console.log('📤 메시지 전송:', message);
     ws.send(JSON.stringify(message));
+    return true;
   } catch (error) {
     console.error('❌ 메시지 전송 실패:', error);
     return false;
@@ -206,10 +219,24 @@ function startSpeaking() {
   return send('openai:conversation', 'input_audio_buffer.commit');
 }
 
+// 사용자 음성 발화
 // PCM16 ArrayBuffer(또는 Int16Array.buffer)를 그대로 보냄?
-function sendAudioPCM16(arrayBuffer) {
+function sendAudioPCM16(base64AudioData) {
   if (!ws || ws.readyState !== WebSocket.OPEN) return false;
-  try { ws.send(arrayBuffer); return true; } catch (e) { console.error(e); return false; }
+  try { 
+    const binaryString = atob (base64AudioData);
+    const bytes = new Uint8Array (binaryString.length);
+    for (let i = 0; i < binaryString.length; i++) {
+        bytes[i] = binaryString.charCodeAt(i);
+    }    
+
+    ws.send(bytes.buffer);
+    console.log("오디오 청크 전송 크기: ", bytes.length, 'bytes');
+    return true;
+  } catch (e) { 
+    console.error("사용자 음성 발화 전송 실패: ", e); 
+    return false; 
+  }
 }
 
 function stopSpeaking() {
@@ -244,6 +271,44 @@ function requestSummary() {
     console.error('❌ 요약 요청 실패:', error);
     return false;
   }
+}
+
+//위치 정보 관련 함수
+function sendUserLocation(lat,lon) {
+    console.log('📍 사용자 위치 전송:', { lat, lon });
+    return send('sonju:currentCoord', 'userCoord', { lat, lon });
+}
+
+function sendCurrentLocation() {
+    return new Promise((resolve, reject) => {
+        if (!navigator.geolocation) {
+            console.error('Geolocation API를 지원하지 않습니다.');
+            reject(new Error('Geolocation API를 지원하지 않습니다.'));
+            return;
+        }
+
+        navigator.geolocation.getCurrentPosition(
+            (position) => {
+                const { latitude, longitude } = position.coords;
+                console.log('현재 위치:', { latitude, longitude });
+
+                const locationSent = sendUserLocation(latitude, longitude);
+                if (locationSent) {
+                    resolve({ latitude, longitude });
+                } else {
+                    reject(new Error('위치 정보 전송 실패'));
+                }
+            },
+            (error) => {
+                console.error('❌ 위치 정보 가져오기 실패:', error);
+                reject(error);
+            },
+            { enableHighAccuracy: true ,
+                timeout: 5000,
+                maximumAge: 180000
+            }
+        );
+    });
 }
 
 function disconnect() {
@@ -289,6 +354,10 @@ const webSocketService = {
   
   // 요약 관련
   requestSummary: requestSummary,
+
+  //위치 관련
+  sendUserLocation: sendUserLocation,
+  sendCurrentLocation: sendCurrentLocation,
   
   // 상태 확인
   get isConnected() {
