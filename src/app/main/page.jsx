@@ -127,13 +127,9 @@ export default function Page() {
 
   return (
     <div className="flex flex-col h-screen">
-
-      <Header className="shrink-0 h-[119px]"/>
-
-      {/*인트로, 서비스버튼*/}
+      <Header/>
       {renderMainContent()}
-
-      <div className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-[430px] z-20">
+      <div className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-[430px]">
         <BottomNav 
           onListeningStart={handleListeningStart}
           onListeningStop={handleListeningStop}
