@@ -13,6 +13,7 @@ export default function ChatRoom({ voiceStarted, voiceStopped, onRecognitionComp
   const [messages, setMessages] = useState([]);
   const [isAiResponding, setIsAiResponding] = useState(false);
   const [currentAiResponse, setCurrentAiResponse] = useState('');
+  const [currentOutputIndex, setCurrentOutputIndex] = useState(null);
   const [suggestedQuestions, setSuggestedQuestions] = useState([]);
   const [officeInfo, setOfficeInfo] = useState(null);
   const {initialMessage} = useParams();
@@ -21,14 +22,14 @@ export default function ChatRoom({ voiceStarted, voiceStopped, onRecognitionComp
   // 🔥 음성 시작/중지 신호를 props로 받아서 처리
   useEffect(() => {
     if (voiceStarted) {
-      console.log('ChatRoom: 음성 인식 시작됨');
+      console.log('[ChatRoom] 음성 인식 시작됨');
       setIsListening(true);
     }
   }, [voiceStarted]);
 
   useEffect(() => {
     if (voiceStopped) {
-      console.log('ChatRoom: 음성 인식 중지됨');
+      console.log('[ChatRoom] 음성 인식 중지됨');
     }      
     setIsListening(false);
   }, [voiceStopped]);
@@ -45,11 +46,11 @@ export default function ChatRoom({ voiceStarted, voiceStopped, onRecognitionComp
         timestamp: new Date()
       }]);
 
-      setTimeout(() => {
-        if (webSocketService.isConnected) {
-          webSocketService.sendText(decodedMessage);
-        }
-      }, 500);
+      // setTimeout(() => {
+      //   if (webSocketService.isConnected) {
+      //     webSocketService.sendText(decodedMessage);
+      //   }
+      // }, 500);
     }
   }, [initialMessage]);
 
@@ -59,9 +60,9 @@ export default function ChatRoom({ voiceStarted, voiceStopped, onRecognitionComp
       webSocketService.connect(import.meta.env.VITE_WEBSOCKET_URL);
     }
     
-    const handleUserVoiceTranscript = (data) => {
-      console.log('사용자 음성 인식 실시간: ', data);
-    };    
+    // const handleUserVoiceTranscript = (data) => {
+    //   console.log('사용자 음성 인식 실시간: ', data);
+    // };    
     
     const handleUserVoiceComplete = (data) => {
       const text = (data?.transcript || "").trim();
@@ -70,9 +71,9 @@ export default function ChatRoom({ voiceStarted, voiceStopped, onRecognitionComp
         setMessages(prev => [...prev, {
           type : 'user', 
           content: text, 
-          timestamp: new Date()
+          timestamp: new Date(),
+          outputIndex: data.outputIndex
         }])
-        webSocketService.sendText(text);
       }
       setIsListening(false);
       onRecognitionComplete?.(text);
@@ -81,27 +82,42 @@ export default function ChatRoom({ voiceStarted, voiceStopped, onRecognitionComp
     const handleTextResponse = (data) => {
       console.log('GPT 텍스트 응답:', data);
       if (data.delta) {
-        setCurrentAiResponse(prev => prev + data.delta);
         setIsAiResponding(true);
+        setCurrentOutputIndex(data.outputIndex);
+        setCurrentAiResponse(prev => prev + data.delta);
       }
     };
 
-    const handleTextDone = () => {
+    const handleTextDone = (data) => {
       console.log('GPT 응답 완료');
       setIsAiResponding(false);
       
       // 🔥 currentAiResponse를 직접 참조하는 대신 상태 업데이트에서 처리
-      setCurrentAiResponse(prevResponse => {
-        if (prevResponse) {
-          setMessages(prev => [...prev, {
-            type: 'ai',
-            content: prevResponse,
-            timestamp: new Date()
-          }]);
+      setMessages(prev => {
+        const updated = [...prev];
+        const aiMessageIndex = updated.findIndex(
+          msg => msg.type === "ai" && msg.outputIndex === data.output_index
+        );
+
+        if (aiMessageIndex >= 0) {
+          // 이미 존재 → 이어붙임
+          updated[aiMessageIndex].content += currentAiResponse;
+        } else {
+          // 새로 추가
+          updated.push({
+            type: "ai",
+            content: currentAiResponse,
+            outputIndex: data.output_index,
+            timestamp: new Date(),
+          });
         }
-        return ''; // 응답 초기화
+        return updated;
       });
+
+      setCurrentAiResponse('');
+      setCurrentOutputIndex(null);
     };
+
 
     const handleSuggestedQuestions = (data) => {
       console.log('제안 질문들:', data);
@@ -124,7 +140,7 @@ export default function ChatRoom({ voiceStarted, voiceStopped, onRecognitionComp
     };
 
     // 핸들러 등록
-    webSocketService.on('openai:conversation','input_audio_transcript.delta', handleUserVoiceTranscript);
+    //webSocketService.on('openai:conversation','input_audio_transcript.delta', handleUserVoiceTranscript);
     webSocketService.on('openai:conversation', 'input_audio_transcript.done', handleUserVoiceComplete);
     webSocketService.on('openai:conversation', 'response.text.delta', handleTextResponse);
     webSocketService.on('openai:conversation', 'response.text.done', handleTextDone);
@@ -133,7 +149,7 @@ export default function ChatRoom({ voiceStarted, voiceStopped, onRecognitionComp
     webSocketService.on('openai:error', handleError);
 
     return () => {
-      webSocketService.off('openai:conversation','input_audio_transcript.delta', handleUserVoiceTranscript);
+    //  webSocketService.off('openai:conversation','input_audio_transcript.delta', handleUserVoiceTranscript);
       webSocketService.off('openai:conversation', 'input_audio_transcript.done', handleUserVoiceComplete);
       webSocketService.off('openai:conversation', 'response.text.delta', handleTextResponse);
       webSocketService.off('openai:conversation', 'response.text.done', handleTextDone);
@@ -141,16 +157,15 @@ export default function ChatRoom({ voiceStarted, voiceStopped, onRecognitionComp
       webSocketService.off('sonju:officeInfo', 'officeInfo', handleOfficeInfo);
       webSocketService.off('openai:error', handleError);
     };    
-  }, [onRecognitionComplete]);
+  }, [onRecognitionComplete, currentAiResponse]);
 
   const handleQuestionClick = (question) => {
     setMessages(prev => [...prev, {
       type: 'user',
       content: question,
-      timestamp: new Date()
+      timestamp: new Date(),
+      outputIndex: prev.length
     }]);
-
-    webSocketService.sendText(question);
     setSuggestedQuestions([]);
   };
 
@@ -173,7 +188,7 @@ export default function ChatRoom({ voiceStarted, voiceStopped, onRecognitionComp
           )
         ))}
         
-        {isAiResponding && (
+        {isAiResponding && currentAiResponse && (
           <SonjuBubble text={currentAiResponse} isTyping={true} />
         )}
         
@@ -213,8 +228,7 @@ export default function ChatRoom({ voiceStarted, voiceStopped, onRecognitionComp
       </div>
       
       {isListening && (
-        <div className="absolute bottom-0 w-full flex justify-center z-40"
->
+        <div className="absolute bottom-0 w-full flex justify-center z-40">
           <SonjuListening />
         </div>
       )}

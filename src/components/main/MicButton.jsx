@@ -152,7 +152,7 @@ export default function MicButton({ onListeningStart, onListeningStop, onTranscr
       }
       
       //서버가 CONNECTED 보낼 때까지 대기 
-      await webSocketService.waitReady();
+      //await webSocketService.waitReady();
       setIsRecording(true);
       setTranscriptText(''); // 이전 텍스트 초기화
       transcriptsRef.current = {}; //전체 초기화
@@ -164,13 +164,13 @@ export default function MicButton({ onListeningStart, onListeningStop, onTranscr
       webSocketService.startSpeaking();
 
       // 오디오 녹음 시작
-      const audioSystem = await startAudioRecognition((base64AudioData) => {
-        const success = webSocketService.sendAudioPCM16(base64AudioData);
+      const audioSystem = await startAudioRecognition((chunk) => {
+        const success = webSocketService.sendAudioBuffer(chunk);
 
         if (!success) {
             console.error("오디오 청크 전송 실패");
         }
-    });
+      });
       
       audioSystemRef.current = audioSystem;
     }
