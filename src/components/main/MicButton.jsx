@@ -74,6 +74,9 @@ export default function MicButton({ onListeningStart, onListeningStop, onTranscr
   const currentOutputIndex = useRef(0);
 
   useEffect(() => {
+    if (currentStep !== "listening" && isRecording) {
+        stopRecording();
+    }
     // Speech Recognition 초기화 (텍스트 변환용)
     const handleInputTranscriptDelta = (data) => {
         console.log('음성 -> 텍스트 결과:', transcriptText);
@@ -135,7 +138,7 @@ export default function MicButton({ onListeningStart, onListeningStop, onTranscr
         stopAudioRecognition(stream, audioContext, processor);
       }
     };
-  }, []);
+  }, [currentStep]);
 
   {/*시작*/}
   const startRecording = async () => {
@@ -193,6 +196,7 @@ export default function MicButton({ onListeningStart, onListeningStop, onTranscr
 
     // WebSocket으로 음성 발화 종료 알림
     webSocketService.stopSpeaking();
+    onListeningStop?.();
     stoppingRef.current=false;
   };
 
@@ -205,7 +209,7 @@ export default function MicButton({ onListeningStart, onListeningStop, onTranscr
   };
 
   // 현재 상태에 따른 버튼 스타일 결정
-  const isActive = isRecording || currentStep === 'listening' || currentStep === 'processing';
+  const isActive = currentStep === 'listening' || isRecording;
     
   return (
     <button 
@@ -215,7 +219,7 @@ export default function MicButton({ onListeningStart, onListeningStop, onTranscr
           ? 'shadow-[0_0_80px_0_yellow]' //drop shadow 적용 
           : ''
         }`}
-      disabled={currentStep === 'processing'} // 처리 중일 때는 비활성화
+      //disabled={isActive} // 처리 중일 때는 비활성화
       style={{overflow: 'visible'}} //shadow 잘림 방지
     >
       <img 
@@ -223,7 +227,7 @@ export default function MicButton({ onListeningStart, onListeningStop, onTranscr
         alt="Mic Icon" 
         className={isActive?"w-[15px] h-[15px] mr-[18px]":"w-[32px] h-[32px] mr-[4.5px]"}
       />
-      {currentStep === 'processing' ? '인식중' : (isActive ? '인식중' : '말하기')}
+      {isActive ? '인식중' : '말하기'}
     </button>
   );
 }

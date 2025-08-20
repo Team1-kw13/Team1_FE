@@ -9,7 +9,7 @@ import SonjuListening from "./SonjuListening";
 import UserBubble from "./UserBubble";
 import webSocketService from "../../service/websocketService";
 
-export default function ChatRoom({ voiceStarted, voiceStopped }) {
+export default function ChatRoom({ voiceStarted, voiceStopped, onRecognitionComplete }) {
   const [messages, setMessages] = useState([]);
   const [isAiResponding, setIsAiResponding] = useState(false);
   const [currentAiResponse, setCurrentAiResponse] = useState('');
@@ -29,8 +29,8 @@ export default function ChatRoom({ voiceStarted, voiceStopped }) {
   useEffect(() => {
     if (voiceStopped) {
       console.log('ChatRoom: 음성 인식 중지됨');
-      setIsListening(false);
-    }
+    }      
+    setIsListening(false);
   }, [voiceStopped]);
 
   // 초기 메시지 처리
@@ -64,17 +64,18 @@ export default function ChatRoom({ voiceStarted, voiceStopped }) {
     };    
     
     const handleUserVoiceComplete = (data) => {
-      console.log('사용자 음성 인식 완료: ', data);
-
-      if (data.transcript) {
+      const text = (data?.transcript || "").trim();
+      
+      if (text) {
         setMessages(prev => [...prev, {
-          type: 'user',
-          content: data.transcript,
+          type : 'user', 
+          content: text, 
           timestamp: new Date()
-        }]);
-
-        webSocketService.sendText(data.transcript);
+        }])
+        webSocketService.sendText(text);
       }
+      setIsListening(false);
+      onRecognitionComplete?.(text);
     };
 
     const handleTextResponse = (data) => {
@@ -140,7 +141,7 @@ export default function ChatRoom({ voiceStarted, voiceStopped }) {
       webSocketService.off('sonju:officeInfo', 'officeInfo', handleOfficeInfo);
       webSocketService.off('openai:error', handleError);
     };    
-  }, []);
+  }, [onRecognitionComplete]);
 
   const handleQuestionClick = (question) => {
     setMessages(prev => [...prev, {
@@ -154,7 +155,7 @@ export default function ChatRoom({ voiceStarted, voiceStopped }) {
   };
 
   return (
-    <div className="flex flex-col rounded-tl-[30px] rounded-tr-[30px] w-full h-full relative z-30 bg-gray100"
+    <div className="flex flex-col rounded-tl-[30px] rounded-tr-[30px] w-full h-full relative z-0 bg-gray100"
          style={{ boxShadow: "0 4px 10px 0px rgba(0, 0, 0, 0.15)" }}>
       
       <div className="flex-shrink-0 flex items-center justify-center pt-[25px]">
@@ -163,9 +164,7 @@ export default function ChatRoom({ voiceStarted, voiceStopped }) {
         </div>
       </div>
       
-      <div className="flex-1 overflow-y-auto pb-[90px] w-full">
-        {isListening && <SonjuListening />}
-        
+      <div className="flex-1 overflow-y-auto pb-[90px] w-full">     
         {messages.map((message, index) => (
           message.type === 'user' ? (
             <UserBubble key={index} text={message.content} />
@@ -212,6 +211,14 @@ export default function ChatRoom({ voiceStarted, voiceStopped }) {
         <Call communityCenter="중계1동 주민센터" number="02-131-2340" />
         <ChatSummary />
       </div>
+      
+      {isListening && (
+        <div className="absolute bottom-0 w-full flex justify-center z-40"
+>
+          <SonjuListening />
+        </div>
+      )}
+   
     </div>
   );
 }

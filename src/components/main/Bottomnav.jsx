@@ -4,15 +4,15 @@ import MicButton from "./MicButton.jsx";
 import homeMenuImage from "../../assets/images/home-menu.svg";
 import userImage from "../../assets/images/user.svg";
 import ServicePreparingModal from "../_common/ServicePreparing.jsx";
-import webSocketService from "../../service/websocketService.jsx";
+//import webSocketService from "../../service/websocketService.jsx";
 
 export default function BottomNav({ 
   onListeningStart, 
   onListeningStop, 
   onTranscriptUpdate,
   onRecognitionError,
-  onRecognitionComplete, //음성 인식 완료 추가
-  isInChatRoom = false, //채팅창 여부 추가
+//  onRecognitionComplete, //음성 인식 완료 추가
+//  isInChatRoom = false, //채팅창 여부 추가
   currentStep 
 }) {
   const navigate = useNavigate();
@@ -26,19 +26,19 @@ export default function BottomNav({
     setIsModalOpen(true);
   };//내 정보 버튼 클릭 시 모달 열기
 
-  const handleChatRoomVoiceStart = () => {
-    webSocketService.startSpeaking();
-  };//채팅창에서 사용자 발화
+  // const handleChatRoomVoiceStart = () => {
+  //   webSocketService.startSpeaking();
+  // };//채팅창에서 사용자 발화
 
-  const handleChatRoomVoiceStop = (recognizedText) => {
-    if (onRecognitionComplete) {
-      onRecognitionComplete(recognizedText);
-    }
-  };//음성 인식 완료 시 상위 컴포넌트에 전달
+  // const handleChatRoomVoiceStop = (recognizedText) => {
+  //   if (onRecognitionComplete) {
+  //     onRecognitionComplete(recognizedText);
+  //   }
+  // };//음성 인식 완료 시 상위 컴포넌트에 전달
 
   return (
     <div className="bg-gray100 h-[139px] pt-[18px] pb-[32px]">
-      <nav className="flex justify-between">
+      <nav className="flex justify-between items-end relative overflow-visible">
         <div className="flex flex-col items-center gap-[6px] pl-[53px] pt-[46px]">
           <button onClick={handleMenuClick}>
             <img src={homeMenuImage} alt="홈" className="w-[24px] h-[24px]" />

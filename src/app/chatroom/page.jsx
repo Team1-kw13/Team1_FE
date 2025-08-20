@@ -20,6 +20,11 @@ export default function ChatRoomPage() {
     setVoiceStopped(prev => prev + 1); // 🔥 값 변경으로 ChatRoom에 신호 전달
   };
 
+  const handleRecognitionComplete = (finalText) => {
+    setIsListening(false);
+    setVoiceStopped(prev => prev + 1);
+  }
+
   return (
     <div className="flex flex-col h-screen w-full max-w-[430px]">
       <Header />
@@ -34,9 +39,9 @@ export default function ChatRoomPage() {
           `}
         </style>
         <ChatRoom 
-          isListening={isListening}
           voiceStarted={voiceStarted}
           voiceStopped={voiceStopped}
+          onRecognitionComplete={handleRecognitionComplete}
         />
       </div>
 
