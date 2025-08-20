@@ -45,6 +45,7 @@ function connect(url = import.meta.env.VITE_WEBSOCKET_URL) {
     try {
       ws = new WebSocket(url); // 소켓 연결
       
+      ws.binaryType = "arraybuffer"; //오디오 바이너리 전송 대비
 
       ws.onopen = function() { // 소켓이 열림 = 연결 성공
         console.log('✅ WebSocket 연결 성공');
