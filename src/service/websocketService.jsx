@@ -46,6 +46,12 @@ function connect(url = import.meta.env.VITE_WEBSOCKET_URL) {
         isConnected = true;
         isConnecting = false;
         connectionAttempts = 0; // 연결 성공 -> 연결 시도 횟수 초기화
+
+        // ✅ 임시 해결: 서버가 READY 신호를 안 줄 때 클라에서 바로 세션 ready 처리
+        sessionReady = true;
+        readyWaiters.forEach(r => r());
+        readyWaiters = [];
+        
         resolve();
       };
       
@@ -138,6 +144,10 @@ function handleMessage(data) {
   // 서버 연결 확인 메시지 처리 (기존 유지)
   if (type === 'CONNECTED') {
     console.log('✅ 서버 연결 확인:', data.data?.clientId);
+    sessionReady = true;
+    readyWaiters.forEach(r => r());
+    readyWaiters = [];
+    console.log("🔔 sessionReady true로 변경됨");
   }
 }
 
@@ -357,7 +367,7 @@ const webSocketService = {
   
   // 대화 관련
   startSpeaking: startSpeaking,
-  sendAudio,
+  sendAudioPCM16,
   stopSpeaking: stopSpeaking,
   selectPrePrompt: selectPrePrompt,
   
@@ -377,7 +387,8 @@ const webSocketService = {
     return isConnecting;
   },
   
-  getStatus: getConnectionStatus
+  getStatus: getConnectionStatus,
+  waitReady
 };
 
 export default webSocketService;

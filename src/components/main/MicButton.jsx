@@ -203,6 +203,7 @@ export default function MicButton({ onListeningStart, onListeningStop, onTranscr
   };
 
   const handleMicClick = () => {
+    console.log("🎤 MicButton 클릭됨");
     if (isRecording) {
       stopRecording();
     } else {
