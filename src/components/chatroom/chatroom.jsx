@@ -9,26 +9,27 @@ import SonjuListening from "./SonjuListening";
 import UserBubble from "./UserBubble";
 import webSocketService from "../../service/websocketService";
 
-export default function ChatRoom({ isListening, voiceStarted, voiceStopped }) {
+export default function ChatRoom({ voiceStarted, voiceStopped }) {
   const [messages, setMessages] = useState([]);
   const [isAiResponding, setIsAiResponding] = useState(false);
   const [currentAiResponse, setCurrentAiResponse] = useState('');
   const [suggestedQuestions, setSuggestedQuestions] = useState([]);
   const [officeInfo, setOfficeInfo] = useState(null);
   const {initialMessage} = useParams();
+  const [isListening, setIsListening] = useState(false);
 
   // 🔥 음성 시작/중지 신호를 props로 받아서 처리
   useEffect(() => {
     if (voiceStarted) {
       console.log('ChatRoom: 음성 인식 시작됨');
-      // 필요한 로직 추가
+      setIsListening(true);
     }
   }, [voiceStarted]);
 
   useEffect(() => {
     if (voiceStopped) {
       console.log('ChatRoom: 음성 인식 중지됨');
-      // 필요한 로직 추가
+      setIsListening(false);
     }
   }, [voiceStopped]);
 
