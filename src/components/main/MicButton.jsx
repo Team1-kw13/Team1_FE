@@ -150,7 +150,9 @@ export default function MicButton({ onListeningStart, onListeningStop, onTranscr
         webSocketService.connect(import.meta.env.VITE_WEBSOCKET_URL);
         await new Promise(resolve => setTimeout(resolve, 1000));
       }
-
+      
+      //서버가 CONNECTED 보낼 때까지 대기 
+      await webSocketService.waitReady();
       setIsRecording(true);
       setTranscriptText(''); // 이전 텍스트 초기화
       transcriptsRef.current = {}; //전체 초기화

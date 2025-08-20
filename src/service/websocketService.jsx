@@ -4,7 +4,10 @@ let isConnected = false;
 let isConnecting = false;
 let messageHandlers = {};
 let connectionAttempts = 0;
+let sessionReady=false;
+let readyWaiters=[];
 const maxConnectionAttempts = 3;
+const CHANNEL='openai:conversation';
 
 // WebSocket 연결
 function connect(url = import.meta.env.VITE_WEBSOCKET_URL) {
@@ -91,6 +94,12 @@ function connect(url = import.meta.env.VITE_WEBSOCKET_URL) {
 // 메시지 처리
 function handleMessage(data) {
   const { channel, type } = data;
+
+    // 서버 에러 패킷 처리 (type 없이 옴)
+  if (channel === 'openai:error') {
+    console.error('🛑 서버 오류:', data.code, data.message);
+    return;
+  }
   
   // 유효성 체크
   if (!type && !channel) {
@@ -253,6 +262,7 @@ function selectPrePrompt(option) {
   return send('openai:conversation', 'preprompted', {enum: option});
 }
 
+
 function requestSummary() {
   if (!ws || !isConnected) {
     console.error('❌ WebSocket이 연결되지 않음');
@@ -347,7 +357,7 @@ const webSocketService = {
   
   // 대화 관련
   startSpeaking: startSpeaking,
-  sendAudioPCM16,
+  sendAudio,
   stopSpeaking: stopSpeaking,
   selectPrePrompt: selectPrePrompt,
   
@@ -371,3 +381,8 @@ const webSocketService = {
 };
 
 export default webSocketService;
+
+//서버가 READY될때까지 기다렸다가 commit보냄
+export function waitReady() {
+  return sessionReady ? Promise.resolve() : new Promise(r => readyWaiters.push(r));
+}

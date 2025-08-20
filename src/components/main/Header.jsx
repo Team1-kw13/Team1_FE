@@ -17,8 +17,9 @@ export default function Header() {
   };//햄버거 메뉴 클릭 시 모달 열기
 
   return (
-    <div className="flex justify-between items-center px-[24px]"
-      style={{ backgroundImage: `url("${headersvg}")`, height: "119px" }}>
+    <div className="relative w-[430px] h-[119px] shrink-0 overflow-visible
+                  flex items-center justify-between px-[24px]"
+      style={{ backgroundImage: `url("${headersvg}")`, height: "119px",backgroundSize:"cover", backgroundRepeat:"no-repeat"}}>
       <header onClick={handleMenuClick} className="text-[33px] font-logo cursor-pointer text-[#302200]">
         손주AI
       </header>

@@ -9,8 +9,8 @@ export default function ServiceButtons() {
   };
 
   return (
-    <div className="bg-gray100">
-      <div className="flex gap-[4px] mb-[19px] ml-[20px] mt-[9px] mb-[20px]">
+    <div className="bg-gray100 flex-1 h-full flex flex-col">
+      <div className="flex gap-[4px] mb-[19px] ml-[20px]">                             
         <img src={Mike} alt="mike" ></img>
         <header className="font-big font-bold text-[28px]">
           무엇을 도와드릴까요?

@@ -207,8 +207,8 @@ export default function Page() {
   };
 
   return (
-    <div className="flex flex-col justify-between max-h-screen w-[430px]">
-      <Header />
+    <div className="flex flex-col h-screen">
+      <Header/>
       {renderMainContent()}
       <BottomNav 
         onListeningStart={handleListeningStart}
