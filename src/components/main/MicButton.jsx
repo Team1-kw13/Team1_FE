@@ -216,6 +216,7 @@ export default function MicButton({ onListeningStart, onListeningStop, onTranscr
           : ''
         }`}
       disabled={currentStep === 'processing'} // 처리 중일 때는 비활성화
+      style={{overflow: 'visible'}} //shadow 잘림 방지
     >
       <img 
         src={isActive ? stopIcon : micIcon} 
