@@ -45,6 +45,7 @@ async function startAudioRecognition(onAudioData) {
   
   processor.onaudioprocess = (e) => {
     const inputData = e.inputBuffer.getChannelData(0);
+    console.log("🎤 오디오 캡처됨, 길이:", inputData.length); // ✅ 추가
     const pcmBuffer = float32ToInt16(inputData);
     
     // 콜백으로 오디오 데이터 전달
@@ -203,6 +204,7 @@ export default function MicButton({ onListeningStart, onListeningStop, onTranscr
   };
 
   const handleMicClick = () => {
+    console.log("🎤 MicButton 클릭됨");
     if (isRecording) {
       stopRecording();
     } else {
