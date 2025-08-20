@@ -46,11 +46,13 @@ function connect(url = import.meta.env.VITE_WEBSOCKET_URL) {
         isConnected = true;
         isConnecting = false;
         connectionAttempts = 0; // 연결 성공 -> 연결 시도 횟수 초기화
-
-        // ✅ 임시 해결: 서버가 READY 신호를 안 줄 때 클라에서 바로 세션 ready 처리
+        
+        {/*
+        // 임시 해결: 서버가 READY 신호를 안 줄 때 클라에서 바로 세션 ready 처리
         sessionReady = true;
         readyWaiters.forEach(r => r());
         readyWaiters = [];
+        */}
         
         resolve();
       };
