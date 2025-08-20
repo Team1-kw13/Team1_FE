@@ -372,6 +372,7 @@ const webSocketService = {
   sendAudioPCM16,
   stopSpeaking: stopSpeaking,
   selectPrePrompt: selectPrePrompt,
+  sendText:sendText,
   
   // 요약 관련
   requestSummary: requestSummary,
