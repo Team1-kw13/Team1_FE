@@ -48,12 +48,12 @@ export default function Servicing({isComplete,recognizedText}){
     },[isComplete,recognizedText,navigate]);
 
     return (
-        <div className="flex flex-col gap-[36px] items-center bg-gray100">
+        <div className="flex flex-col gap-[36px] items-center bg-center bg-cover bg-gray100 flex-1 h-full">
             {/* 인식된 텍스트 */}
             <div className="text-[28px] font-big font-bold">
                 {recognizedText
                     ?<span className="pt-[18px]">{recognizedText}</span>
-                    :<img src={Listening} className="pt-[20px]"/> //원래 pt-30인데 말풍선잘림
+                    :<img src={Listening} className="pt-[30px]"/> //원래 pt-30인데 말풍선잘림
                 }
             </div>
 
