@@ -18,6 +18,7 @@ export default function ChatRoom({ voiceStarted, voiceStopped, onRecognitionComp
   const [officeInfo, setOfficeInfo] = useState(null);
   const {initialMessage} = useParams();
   const [isListening, setIsListening] = useState(false);
+  const [hasInitMessage, setHasInitMessage] = useState(false);
 
   // 🔥 음성 시작/중지 신호를 props로 받아서 처리
   useEffect(() => {
@@ -36,7 +37,7 @@ export default function ChatRoom({ voiceStarted, voiceStopped, onRecognitionComp
 
   // 초기 메시지 처리
   useEffect(() => {
-    if (initialMessage) {
+    if (initialMessage && !hasInitMessage) {
       const decodedMessage = decodeURIComponent(initialMessage);
       console.log('초기 메세지: ', decodedMessage);
 
@@ -46,13 +47,15 @@ export default function ChatRoom({ voiceStarted, voiceStopped, onRecognitionComp
         timestamp: new Date()
       }]);
 
+      setHasInitMessage(true);
+
       // setTimeout(() => {
       //   if (webSocketService.isConnected) {
       //     webSocketService.sendText(decodedMessage);
       //   }
       // }, 500);
     }
-  }, [initialMessage]);
+  }, [initialMessage, hasInitMessage]);
 
   // WebSocket 핸들러
   useEffect(() => {
@@ -187,13 +190,9 @@ export default function ChatRoom({ voiceStarted, voiceStopped, onRecognitionComp
             <SonjuBubble key={index} text={message.content} />
           )
         ))}
-
-        {/* 그라데이션 확인용 SOnjuBubble 코드 */}
-        <SonjuBubble text="어쩌고 저쩌고 절차를 소개할게요. 어쩌고 저쩌고 어쩌고 저쩌고 입니다. 어쩌고 하는데 어쩌고 하는데. 어쩌고 구청 키오스크 이용하면 됨. 준비물은 뭐만 필요함 ㅇ러ㅣ나허ㅣ아ㅓ힌 ㅏㅓ히ㅏ어히나ㅓㅣ허니하ㅓㅣㅇ허니허ㅣ어ㅣ러이허ㅣ나히ㅣㄴ허ㅣ너ㅣ허니아힌허"/>
-        
-        {isAiResponding && currentAiResponse && (
+        {/* {isAiResponding && currentAiResponse && (
           <SonjuBubble text={currentAiResponse} isTyping={true} />
-        )}
+        )} */}
         
         {suggestedQuestions.length > 0 && (
           <div className="mt-[40px] px-6">
