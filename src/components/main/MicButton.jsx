@@ -3,235 +3,180 @@ import micIcon from "../../assets/images/mic_fill.svg";
 import stopIcon from "../../assets/images/stop.svg";
 import webSocketService from "../../service/websocketService";
 
-// 오디오 유틸리티 함수들
+// 유틸: 오디오 캡처 & 변환
 function float32ToInt16(float32Array) {
   const int16Array = new Int16Array(float32Array.length);
   for (let i = 0; i < float32Array.length; i++) {
-    // Float32 (-1.0 ~ 1.0)를 Int16 (-32768 ~ 32767)로 변환
     int16Array[i] = Math.max(-1, Math.min(1, float32Array[i])) * 0x7FFF;
   }
   return int16Array;
 }
 
-function arrayBufferToBase64(buffer) {
-  let binary = '';
-  const bytes = new Uint8Array(buffer);
-  const chunkSize = 0x8000; // 32KB 청크로 처리
-  
-  for (let i = 0; i < bytes.length; i += chunkSize) {
-    binary += String.fromCharCode.apply(null, bytes.subarray(i, i + chunkSize));
-  }
-  return btoa(binary);
-}
-
+// 오디오 캡처 시작 (PCM16 ArrayBuffer 콜백으로 전달)
 async function startAudioRecognition(onAudioData) {
-  const stream = await navigator.mediaDevices.getUserMedia({ 
+  const stream = await navigator.mediaDevices.getUserMedia({
     audio: {
       sampleRate: 24000,
       channelCount: 1,
       echoCancellation: true,
       noiseSuppression: true,
-      autoGainControl:true
+      autoGainControl: true
     }
   });
-  
-  const audioContext = new AudioContext({ sampleRate: 24000 });
+
+  const AC = window.AudioContext || window.webkitAudioContext;
+  const audioContext = new AC({ sampleRate: 24000 });
   const source = audioContext.createMediaStreamSource(stream);
   const processor = audioContext.createScriptProcessor(4096, 1, 1);
-  
+
   source.connect(processor);
-  /*processor.connect(audioContext.destination);*/
-  //destination에 연결하지 않아도 onaudioprocess는 동작함
-  
+  // processor.connect(audioContext.destination); // 필요 없으면 연결 X
+
   processor.onaudioprocess = (e) => {
-    const inputData = e.inputBuffer.getChannelData(0);
-    console.log("🎤 오디오 캡처됨, 길이:", inputData.length); // ✅ 추가
-    const pcmBuffer = float32ToInt16(inputData);
-    
-    // 콜백으로 오디오 데이터 전달
-    const base64 = arrayBufferToBase64 (pcmBuffer);
-    onAudioData?.(base64);
+    const input = e.inputBuffer.getChannelData(0);
+    const pcm = float32ToInt16(input);
+    onAudioData?.(pcm.buffer); // ArrayBuffer로 전달
   };
-  
+
   return { stream, audioContext, processor };
 }
 
-async function stopAudioRecognition(stream,audioContext,processor) {
+// 오디오 캡처 정지/정리
+async function stopAudioRecognition(stream, audioContext, processor) {
   try { if (processor) { processor.onaudioprocess = null; processor.disconnect(); } } catch {}
   try { if (stream) stream.getTracks().forEach(t => t.stop()); } catch {}
   try {
-    if (audioContext && audioContext.state !== 'closed') {
-        await audioContext.close();
+    if (audioContext && audioContext.state !== "closed") {
+      await audioContext.close();
     }
   } catch {}
 }
 
 export default function MicButton({ onListeningStart, onListeningStop, onTranscriptUpdate, currentStep }) {
   const [isRecording, setIsRecording] = useState(false);
-  const [transcriptText, setTranscriptText] = useState('');
-  const transcriptsRef = useRef({});
   const audioSystemRef = useRef(null);
-  const stoppingRef=useRef(false);
-  const currentOutputIndex = useRef(0);
+  //첫PCM청크가 서버에 도달하기 전에 stopSpeaking()을 안보내도록
+  const hasAudioRef=useRef(false); 
+  const stoppingRef = useRef(false);
+
+  // 브라우저 스피치 인식 추가
+  const recognitionRef = useRef(null);
+  const recogActiveRef = useRef(false);
 
   useEffect(() => {
-    if (currentStep !== "listening" && isRecording) {
-        stopRecording();
+    // 브라우저 스피치 인식 초기화
+    if ("webkitSpeechRecognition" in window || "SpeechRecognition" in window) {
+      const SpeechRecognition = window.webkitSpeechRecognition || window.SpeechRecognition;
+      const rec = new SpeechRecognition();
+      rec.continuous = false;
+      rec.interimResults = false;   // 중간 결과 필요시 true
+      rec.lang = "ko-KR";
+
+      rec.onresult = (event) => {
+        const transcript = event.results[0][0]?.transcript || "";
+        console.log("🎤 브라우저 스피치 인식 결과:", transcript);
+        onTranscriptUpdate?.(transcript);
+        onListeningStop?.(transcript);
+      };
+
+      rec.onerror = (event) => {
+        console.error("스피치 인식 에러:", event.error);
+      };
+
+      rec.onstart = () => { recogActiveRef.current = true; };
+      rec.onend   = () => { recogActiveRef.current = false; };
+
+      recognitionRef.current = rec;
     }
-    // Speech Recognition 초기화 (텍스트 변환용)
-    const handleInputTranscriptDelta = (data) => {
-        console.log('음성 -> 텍스트 결과:', transcriptText);
-        console.log('음성 -> 텍스트 : ', data);
-        
-        const { output_index, delta } = data;
-
-        if (!transcriptsRef.current[output_index]) {
-            transcriptsRef.current[output_index] = '';
-        }
-
-        if (delta) {
-            transcriptsRef.current[output_index] += delta;
-            const newText = transcriptsRef.current[output_index];
-
-            console.log("누적 텍스트: ", newText);
-            setTranscriptText(newText);
-
-            if (onTranscriptUpdate) {
-                onTranscriptUpdate(newText);
-            }
-        }
-    };
-
-    const handleInputTranscriptDone = (data) => {
-        console.log('음성 인식 완료', data);
-        const { output_index } = data;
-
-        const finalText = transcriptsRef.current[output_index] || '';
-        console.log("최종 인식 결과 텍스트: ", finalText);
-
-        if (finalText && onListeningStop) {
-            onListeningStop(finalText.trim());
-        }
-
-        setTranscriptText('');
-        currentOutputIndex.current++;
-    }
-
-    const handleError = (data) => {
-        console.error('음성 인식 오류', data);
-        if (isRecording) {
-            stopRecording(); // 오류 발생 시 녹음 중지
-        }
-    }
-
-    webSocketService.on('openai:conversation', 'input_audio_transcript.delta', handleInputTranscriptDelta);
-    webSocketService.on('openai:conversation', 'input_audio_transcript.done', handleInputTranscriptDone);
-    webSocketService.on('openai:error', handleError);
 
     return () => {
-      // 컴포넌트 언마운트 시 정리
-      webSocketService.off('openai:conversation', 'input_audio_transcript.delta', handleInputTranscriptDelta);
-      webSocketService.off('openai:conversation', 'input_audio_transcript.done', handleInputTranscriptDone);
-      webSocketService.off('openai:error', handleError);
-
       if (audioSystemRef.current) {
         const { stream, audioContext, processor } = audioSystemRef.current;
         stopAudioRecognition(stream, audioContext, processor);
       }
     };
-  }, [currentStep]);
+  }, [onListeningStop, onTranscriptUpdate]);
 
-  {/*시작*/}
   const startRecording = async () => {
     try {
-      if(stoppingRef.current) return; //멈추는 중이면 무시
-      // WebSocket 연결 확인
+      if (stoppingRef.current) return;
+
+      // WebSocket 연결 (필요 시)
       if (!webSocketService.isConnected) {
-        console.log('WebSocket 연결 중...');
-        webSocketService.connect(import.meta.env.VITE_WEBSOCKET_URL);
-        await new Promise(resolve => setTimeout(resolve, 1000));
+        await webSocketService.connect(import.meta.env.VITE_WEBSOCKET_URL);
       }
-      
-      //서버가 CONNECTED 보낼 때까지 대기 
-      await webSocketService.waitReady();
+
       setIsRecording(true);
-      setTranscriptText(''); // 이전 텍스트 초기화
-      transcriptsRef.current = {}; //전체 초기화
+      onListeningStart?.();
 
-      // 부모 컴포넌트에 녹음 시작 알림
-      onListeningStart?.()
-
-      // WebSocket으로 음성 발화 시작 알림
+      // 서버로 “녹음 시작” 알림 (시작 시 commit 보내지 않기)
       webSocketService.startSpeaking();
 
-      // 오디오 녹음 시작
-      const audioSystem = await startAudioRecognition((base64AudioData) => {
-        const success = webSocketService.sendAudioPCM16(base64AudioData);
-
-        if (!success) {
-            console.error("오디오 청크 전송 실패");
-        }
-    });
-      
+      // 오디오 캡처 시작 후 청크를 서버로 전송
+      const audioSystem = await startAudioRecognition((arrayBuffer) => {
+        const ok=webSocketService.sendAudioPCM16(arrayBuffer);
+        if(ok) hasAudioRef.current=true; //최소 1청크 보냈음 표시
+      });
       audioSystemRef.current = audioSystem;
-    }
-    catch (error) {
-      console.error('녹음 시작 실패:', error);
+
+      // 브라우저 스피치 인식 시작 (즉시 텍스트 얻기)
+      try { recognitionRef.current?.start(); } catch {}
+
+    } catch (e) {
+      console.error("녹음 시작 실패:", e);
       setIsRecording(false);
-      alert('마이크 접근 권한이 필요합니다.');
+      alert("마이크 접근 권한이 필요합니다.");
     }
   };
 
-  {/*정지*/}
-  const stopRecording = async() => {
-    if (stoppingRef.current) return; //이미 정지 처리중
-    stoppingRef.current=true;
+  const stopRecording = async () => {
+    if (stoppingRef.current) return;
+    stoppingRef.current = true;
 
-    console.log('녹음 중지');
     setIsRecording(false);
 
-    // 오디오 시스템 정리
     if (audioSystemRef.current) {
       const { stream, audioContext, processor } = audioSystemRef.current;
       await stopAudioRecognition(stream, audioContext, processor);
       audioSystemRef.current = null;
     }
 
-    // WebSocket으로 음성 발화 종료 알림
-    webSocketService.stopSpeaking();
-    onListeningStop?.();
-    stoppingRef.current=false;
+    // 브라우저 스피치 인식 정지
+    if (recogActiveRef.current) { try { recognitionRef.current?.stop(); } catch {} }
+
+    // 서버로 녹음 끝 알림 (commit -> end)
+    webSocketService.stopSpeaking(hasAudioRef.current);
+    hasAudioRef.current=false;
+
+    stoppingRef.current = false;
   };
 
   const handleMicClick = () => {
-    console.log("🎤 MicButton 클릭됨");
-    if (isRecording) {
-      stopRecording();
-    } else {
-      startRecording();
-    }
+    if (isRecording) stopRecording();
+    else startRecording();
   };
 
-  // 현재 상태에 따른 버튼 스타일 결정
-  const isActive = currentStep === 'listening' || isRecording;
-    
+  const isActive = isRecording || currentStep === "listening" || currentStep === "processing";
+
   return (
+    <>
     <button 
       onClick={handleMicClick} 
       className={`flex items-center px-[37px] py-[24px] text-[28px] font-bold w-[195px] h-[91px] rounded-[100px] border-[3px] border-white bg-yellow
         ${isActive 
-          ? 'shadow-[0_0_80px_0_yellow]' //drop shadow 적용 
+          ? 'shadow-[0_0_80px_0_yellow]' //drop shadow 적용
           : ''
-        }`}
-      //disabled={isActive} // 처리 중일 때는 비활성화
+        }`} 
+      disabled={isActive} //처리 중일 때는 비활성화
       style={{overflow: 'visible'}} //shadow 잘림 방지
-    >
+      >
       <img 
         src={isActive ? stopIcon : micIcon} 
-        alt="Mic Icon" 
+        alt="Mic" 
         className={isActive?"w-[15px] h-[15px] mr-[18px]":"w-[32px] h-[32px] mr-[4.5px]"}
       />
-      {isActive ? '인식중' : '말하기'}
+      {isActive ? "인식중" : "말하기"}
     </button>
+    </>
   );
 }

@@ -57,18 +57,18 @@ function connect(url = import.meta.env.VITE_WEBSOCKET_URL) {
         resolve();
       };
       
-    //   ws.onmessage = function(event) { // 서버 -> 클라 메세지
-    //     if (typeof event.data === 'string') {
-    //         const message = JSON.parse(event.data);
-    //         console.log ("서버에서 받은 string type 메세지: ", message);
-    //         handleMessage(message);
-    //     } else if (typeof event.data instanceof Blob) {
-    //         console.log ("서버에서 받은 오디오(Blob) 메세지: ", event.data);
-    //         handleMessage({ type: '', data: event.data});
-    //     } else {
-    //         console.log ("서버에서 JSON, Blob 이외의 type 메세지 수신: ", event.data);
-    //     }
-    //   }; //GPT 응답 관련 코드 임시 연결 종료
+      ws.onmessage = function(event) { // 서버 -> 클라 메세지
+        if (typeof event.data === 'string') {
+            const message = JSON.parse(event.data);
+            console.log ("서버에서 받은 string type 메세지: ", message);
+            handleMessage(message);
+        } else if (typeof event.data instanceof Blob) {
+            console.log ("서버에서 받은 오디오(Blob) 메세지: ", event.data);
+            handleMessage({ type: '', data: event.data});
+        } else {
+            console.log ("서버에서 JSON, Blob 이외의 type 메세지 수신: ", event.data);
+        }
+      }; //GPT 응답 관련 코드 임시 연결 종료
       
       ws.onclose = function() { // 소켓 연결 종료
         console.log('🔌 WebSocket 연결 종료');
@@ -143,14 +143,7 @@ function handleMessage(data) {
     }
   });
 
-  // 서버 연결 확인 메시지 처리 (기존 유지)
-  if (type === 'CONNECTED') {
-    console.log('✅ 서버 연결 확인:', data.data?.clientId);
-    sessionReady = true;
-    readyWaiters.forEach(r => r());
-    readyWaiters = [];
-    console.log("🔔 sessionReady true로 변경됨");
-  }
+  
 }
 
 // 핸들러 등록 (중복 방지)
@@ -237,7 +230,7 @@ function send(channel, type, payload = {}) {
 // === 대화 관련 함수들 ===
 function startSpeaking() {
   console.log('🎤 음성 발화 시작');
-  return send('openai:conversation','input_audio_buffer.commit');
+  return true;
 }
 
 // 사용자 음성 발화
@@ -260,9 +253,10 @@ function sendAudioPCM16(base64AudioData) {
   }
 }
 
-function stopSpeaking() {
+function stopSpeaking(hasAudio=true) {
   console.log('🛑 음성 발화 종료');
-  return send('openai:conversation', 'input_audio_buffer.end');
+  if(hasAudio) send('input_audio_buffer.commit');
+  return send('input_audio_buffer.end');
 }
 
 function sendText(text) {
