@@ -1,10 +1,12 @@
 import {Link, useNavigate} from 'react-router-dom';
 import Mike from "../../assets/images/mic_fill.svg";
+import webSocketService from '../../service/websocketService';
 
 export default function ServiceButtons() {
   const navigate = useNavigate();
 
   const handleServiceClick = (content) => {
+    webSocketService.sendPrePrompt(content);
     navigate(`/chatroompage/${encodeURIComponent(content)}`);
   };
 
