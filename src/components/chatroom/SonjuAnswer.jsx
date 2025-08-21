@@ -9,13 +9,16 @@ export default function SonjuAnswer({ text }) {
     setDisplayText("");
 
     const interval = setInterval(() => {
-        setDisplayText((prev) => prev + text[index]);
-        index++;
-        if (index >= text.length-1) clearInterval(interval)
-        }, 20);
+        if (index < text.length) {
+          setDisplayText((prev) => prev + text[index]);
+          index++;
+        } else {
+          clearInterval(interval);
+        }
+      }, 20); // 두 번째 글자 안 잘리는지 확인 필요
 
-        return () => clearInterval(interval);
-  }, [text]);
+      return () => clearInterval(interval);
+    }, [text]);
 
   return (
     <div className="flex justify-center items-center mt-[12px] mx-[24px]">
