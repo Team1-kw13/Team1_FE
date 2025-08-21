@@ -115,30 +115,12 @@ export default function Page() {
       }
     };
 
-    // 응답 완료 처리
-    const handleInputTranscriptDone = (data) => {
-      console.log('음성 인식 완료:', data);
-      setIsRecognitionComplete(true);
-
-      setTimeout(() => {
-        navigate(`/chatroompage/${encodeURIComponent(recognizedText)}`);
-      }, 2000);
-    };
-
-    const handleConnected = (data) => {
-      console.log('WebSocket 연결됨:', data);
-    };
-
     //핸들러 등록
-    webSocketService.on('openai:conversation', 'response.audio_transcript.delta', handleInputTranscriptDelta);
-    webSocketService.on('openai:conversation', 'input_audio_transcript.done', handleInputTranscriptDone);
-    webSocketService.on('CONNECTED', handleConnected);
+    webSocketService.on('openai:conversation', 'input_audio_transcript.delta', handleInputTranscriptDelta);
 
     return () => {
       // 핸들러 제거
-      webSocketService.off('openai:conversation', 'response.audio_transcript.delta', handleInputTranscriptDelta);
-      webSocketService.off('openai:conversation', 'input_audio_transcript.done', handleInputTranscriptDone);
-      webSocketService.off('CONNECTED', handleConnected);
+      webSocketService.off('openai:conversation', 'input_audio_transcript.delta', handleInputTranscriptDelta);
       isInitialized.current = false; // 컴포넌트 언마운트 시 초기화 상태 리셋
     };
   }, [currentStep, realtimeTranscript]);
@@ -151,9 +133,18 @@ export default function Page() {
     setIsRecognitionComplete(false);
   };
 
-  const handleListeningStop = () => {
-    console.log('음성 인식 중지');
-  };
+ const handleListeningStop = (finalText = '') => {
+   // 최종 텍스트를 화면에 보여주기
+   setRecognizedText(finalText);
+   setRealtimeTranscript(finalText);
+   setCurrentStep('processing');
+   setIsRecognitionComplete(true);
+
+   // 3000ms 후 채팅 페이지로 이동
+   setTimeout(() => {
+     navigate(`/chatroompage/${encodeURIComponent(finalText)}`);
+    }, 3000);
+   };
 
   const handleTranscriptUpdate = (newTranscript) => {
     setRealtimeTranscript(newTranscript);
