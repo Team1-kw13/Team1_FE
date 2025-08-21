@@ -46,10 +46,10 @@ async function startAudioRecognition(onAudioData) {
   processor.onaudioprocess = (e) => {
     const inputData = e.inputBuffer.getChannelData(0);
     console.log("🎤 오디오 캡처됨, 길이:", inputData.length); // ✅ 추가
-    const pcmBuffer = float32ToInt16(inputData);
+    const pcm16 = float32ToInt16(inputData);
     
     // 콜백으로 오디오 데이터 전달
-    const base64 = arrayBufferToBase64 (pcmBuffer);
+    const base64 = arrayBufferToBase64(pcm16.buffer);
     onAudioData?.(base64);
   };
   
@@ -165,8 +165,8 @@ export default function MicButton({ onListeningStart, onListeningStop, onTranscr
       webSocketService.startSpeaking();
 
       // 오디오 녹음 시작
-      const audioSystem = await startAudioRecognition((chunk) => {
-        const success = webSocketService.sendAudioBuffer(chunk);
+      const audioSystem = await startAudioRecognition((base64chunk) => {
+        const success = webSocketService.sendAudioBuffer(base64chunk);
 
         if (!success) {
             console.error("오디오 청크 전송 실패");
