@@ -190,9 +190,10 @@ export default function ChatRoom({ voiceStarted, voiceStopped, onRecognitionComp
             <SonjuBubble key={index} text={message.content} />
           )
         ))}
-        {/* {isAiResponding && currentAiResponse && (
+        
+        {isAiResponding && currentAiResponse && (
           <SonjuBubble text={currentAiResponse} isTyping={true} />
-        )} */}
+        )}
         
         {suggestedQuestions.length > 0 && (
           <div className="mt-[40px] px-6">
