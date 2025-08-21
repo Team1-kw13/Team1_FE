@@ -3,7 +3,7 @@ import SunImg from "../../assets/images/sun.svg";
 import SonjuAnswer from "./SonjuAnswer";
 
 export default function SonjuBubble({ text }) {
-  const [isLoading, setIsLoading] = useState(true); //답변 생성 상태
+  const [isLoading, setIsLoading] = useState(false); //답변 생성 상태
   const [answer, setAnswer] = useState(""); //AI 답변 저장
 
   useEffect (()=> {

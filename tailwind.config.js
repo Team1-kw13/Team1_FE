@@ -18,13 +18,18 @@ export default {
         logo: ['"Ownglyph PDH"', 'sans-serif'],
       },
       keyframes:{
+        gradient: {
+          '0%':{backgroundPosition: '0% 50%'},
+          '50%':{backgroundPosition: '100% 50%'},
+          '100%':{backgroundPosition: '0% 50%'},
+        },
         fadeUp:{
           "0%":{opacity:"0",transform:"translateY(20px)"},
           "100%":{opacity:"1",transform:"translateX(0)"},
         },
       },
       animation: {
-        gradient: 'gradientMove 0.8s ease-in-out forwards',
+        gradient: 'gradient 0.8s ease-in-out infinite',
         fadeUp:"fadeUp 0.8s ease-out forwards",
       },
       backgroundSize: {

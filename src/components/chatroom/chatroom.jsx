@@ -187,6 +187,9 @@ export default function ChatRoom({ voiceStarted, voiceStopped, onRecognitionComp
             <SonjuBubble key={index} text={message.content} />
           )
         ))}
+
+        {/* 그라데이션 확인용 SOnjuBubble 코드 */}
+        <SonjuBubble text="어쩌고 저쩌고 절차를 소개할게요. 어쩌고 저쩌고 어쩌고 저쩌고 입니다. 어쩌고 하는데 어쩌고 하는데. 어쩌고 구청 키오스크 이용하면 됨. 준비물은 뭐만 필요함 ㅇ러ㅣ나허ㅣ아ㅓ힌 ㅏㅓ히ㅏ어히나ㅓㅣ허니하ㅓㅣㅇ허니허ㅣ어ㅣ러이허ㅣ나히ㅣㄴ허ㅣ너ㅣ허니아힌허"/>
         
         {isAiResponding && currentAiResponse && (
           <SonjuBubble text={currentAiResponse} isTyping={true} />
