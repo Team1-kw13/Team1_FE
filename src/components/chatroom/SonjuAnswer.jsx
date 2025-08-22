@@ -20,7 +20,7 @@ function splitToLinkParts(str) {
   return parts;
 }
 
-export default function SonjuAnswer({ text }) {
+export default function SonjuAnswer({ text, onTypingComplete, isTyping = false }) {
   const [displayText, setDisplayText] = useState("");
 
   useEffect(() => {
@@ -32,6 +32,13 @@ export default function SonjuAnswer({ text }) {
     // 백엔드에서 붙는 stray 'undefined' 토큰 방지
     const safe = text.replace(/(undefined)+$/u, "");
 
+    //만약 isTyping이 false라면 전체 텍스트 표시
+    if (!isTyping) {
+      setDisplayText(safe);
+      onTypingComplete?.();
+      return;
+    }
+
     let index = 0;
     setDisplayText("");
 
@@ -39,11 +46,14 @@ export default function SonjuAnswer({ text }) {
       index ++;
       // slice 방식이라 글자 누락/undefined 누적 없음
       setDisplayText(safe.slice(0, index));
-      if (index >= safe.length) clearInterval(interval);
+      if (index >= safe.length) {
+        clearInterval(interval);
+        onTypingComplete?.();
+      }
     }, 20);
 
       return () => clearInterval(interval);
-    }, [text]);
+    }, [text, isTyping, onTypingComplete]);
 
   const parts = useMemo(() => splitToLinkParts(displayText), [displayText]);
 
