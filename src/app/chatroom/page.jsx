@@ -7,6 +7,7 @@ export default function ChatRoomPage() {
   const [isListening, setIsListening] = useState(false);
   const [voiceStarted, setVoiceStarted] = useState(0); // 🔥 숫자로 변경하여 변화 감지
   const [voiceStopped, setVoiceStopped] = useState(0); // 🔥 숫자로 변경하여 변화 감지
+  const [latestTranscript, setLatestTranscript] = useState('');
 
   const handleChatRoomVoiceStart = () => {
     console.log('ChatRoomPage: 음성 인식 시작');
@@ -23,6 +24,7 @@ export default function ChatRoomPage() {
   const handleRecognitionComplete = (finalText) => {
     setIsListening(false);
     setVoiceStopped(prev => prev + 1);
+    if (finalText) setLatestTranscript(finalText); //메인 -> 채팅창 음성 인식 결과 전달
   }
 
   return (
@@ -42,6 +44,7 @@ export default function ChatRoomPage() {
           voiceStarted={voiceStarted}
           voiceStopped={voiceStopped}
           onRecognitionComplete={handleRecognitionComplete}
+          transcriptFromPage={latestTranscript}
         />
       </div>
 
