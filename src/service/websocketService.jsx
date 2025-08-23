@@ -430,6 +430,6 @@ const webSocketService = {
 export default webSocketService;
 
 //서버가 READY될때까지 기다렸다가 commit보냄
-export function waitReady() {
-  return sessionReady ? Promise.resolve() : new Promise(r => readyWaiters.push(r));
-}
+// export function waitReady() {
+//   return sessionReady ? Promise.resolve() : new Promise(r => readyWaiters.push(r));
+// }

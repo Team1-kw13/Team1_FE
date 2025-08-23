@@ -3,7 +3,7 @@ import micIcon from "../../assets/images/mic_fill.svg";
 import stopIcon from "../../assets/images/stop.svg";
 import webSocketService from "../../service/websocketService";
 
-// 유틸: Float32Array를 Int16Array로 변환
+// 유틸: 오디오 캡처 & 변환
 function float32ToInt16(float32Array) {
   const int16Array = new Int16Array(float32Array.length);
   for (let i = 0; i < float32Array.length; i++) {
@@ -12,7 +12,7 @@ function float32ToInt16(float32Array) {
   return int16Array;
 }
 
-// 오디오 캡처 시작
+// 오디오 캡처 시작 (PCM16 ArrayBuffer 콜백으로 전달)
 async function startAudioCapture(onAudioData) {
   const stream = await navigator.mediaDevices.getUserMedia({
     audio: {
@@ -30,6 +30,7 @@ async function startAudioCapture(onAudioData) {
   const processor = audioContext.createScriptProcessor(4096, 1, 1);
 
   source.connect(processor);
+  // processor.connect(audioContext.destination); // 필요 없으면 연결 X
 
   processor.onaudioprocess = (e) => {
     const input = e.inputBuffer.getChannelData(0);
@@ -76,27 +77,28 @@ export default function MicButton({
 }) {
   const [isRecording, setIsRecording] = useState(false);
   const audioSystemRef = useRef(null);
-  const hasAudioRef = useRef(false);
+  //첫PCM청크가 서버에 도달하기 전에 stopSpeaking()을 안보내도록
+  const hasAudioRef=useRef(false); 
   const stoppingRef = useRef(false);
   
-  // 브라우저 스피치 인식 (백업용)
+  // 브라우저 스피치 인식 추가
   const recognitionRef = useRef(null);
   const recogActiveRef = useRef(false);
 
   useEffect(() => {
-    // 브라우저 스피치 인식 초기화 (백업 메커니즘)
+    // 브라우저 스피치 인식 초기화
     if ("webkitSpeechRecognition" in window || "SpeechRecognition" in window) {
       const SpeechRecognition = window.webkitSpeechRecognition || window.SpeechRecognition;
       const rec = new SpeechRecognition();
       rec.continuous = false;
-      rec.interimResults = false;
+      rec.interimResults = false;   // 중간 결과 필요시 true
       rec.lang = "ko-KR";
 
       rec.onresult = (event) => {
         const transcript = event.results[0][0]?.transcript || "";
-        console.log("🎤 브라우저 백업 스피치 인식 결과:", transcript);
-        // 서버 응답이 없을 경우 백업으로 사용
+        console.log("🎤 브라우저 스피치 인식 결과:", transcript);
         onTranscriptUpdate?.(transcript);
+        onListeningStop?.(transcript);
       };
 
       rec.onerror = (event) => {
@@ -122,7 +124,7 @@ export default function MicButton({
         stopAudioCapture(stream, audioContext, processor);
       }
     };
-  }, [onTranscriptUpdate]);
+  }, [onListeningStop, onTranscriptUpdate]);
 
   const startRecording = async () => {
     try {
@@ -201,31 +203,31 @@ export default function MicButton({
   };
 
   const handleMicClick = () => {
-    if (isRecording) {
-      stopRecording();
-    } else {
-      startRecording();
-    }
+    if (isRecording) stopRecording();
+    else startRecording();
   };
 
   const isActive = isRecording || currentStep === "listening" || currentStep === "processing";
 
   return (
+    <>
     <button 
       onClick={handleMicClick} 
       className={`flex items-center px-[37px] py-[24px] text-[28px] font-bold w-[195px] h-[91px] rounded-[100px] border-[3px] border-white bg-yellow
         ${isActive 
-          ? 'shadow-[0_0_80px_0_yellow]' 
+          ? 'shadow-[0_0_80px_0_yellow]' //drop shadow 적용
           : ''
         }`} 
-      style={{overflow: 'visible'}}
+      //disabled={isActive} //처리 중일 때는 비활성화
+      style={{overflow: 'visible'}} //shadow 잘림 방지
     >
       <img 
         src={isActive ? stopIcon : micIcon} 
         alt="Mic" 
-        className={isActive ? "w-[15px] h-[15px] mr-[18px]" : "w-[32px] h-[32px] mr-[4.5px]"}
+        className={isActive?"w-[15px] h-[15px] mr-[18px]":"w-[32px] h-[32px] mr-[4.5px]"}
       />
       {isActive ? "인식중" : "말하기"}
     </button>
+    </>
   );
 }
