@@ -62,7 +62,7 @@ function connect(url = import.meta.env.VITE_WEBSOCKET_URL) {
             const message = JSON.parse(event.data);
             console.log ("서버에서 받은 string type 메세지: ", message);
             handleMessage(message);
-        } else if (typeof event.data instanceof Blob) {
+        } else if (event.data instanceof Blob) {
             console.log ("서버에서 받은 오디오(Blob) 메세지: ", event.data);
             handleMessage({ type: '', data: event.data});
         } else {
@@ -255,8 +255,8 @@ function sendAudioPCM16(base64AudioData) {
 
 function stopSpeaking(hasAudio=true) {
   console.log('🛑 음성 발화 종료');
-  if(hasAudio) send('input_audio_buffer.commit');
-  return send('input_audio_buffer.end');
+  if(hasAudio) send(CHANNEL,'input_audio_buffer.commit');
+  return send(CHANNEL,'input_audio_buffer.end');
 }
 
 function sendText(text) {

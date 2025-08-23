@@ -167,7 +167,7 @@ export default function MicButton({ onListeningStart, onListeningStop, onTranscr
           ? 'shadow-[0_0_80px_0_yellow]' //drop shadow 적용
           : ''
         }`} 
-      disabled={isActive} //처리 중일 때는 비활성화
+      //disabled={isActive} //처리 중일 때는 비활성화
       style={{overflow: 'visible'}} //shadow 잘림 방지
       >
       <img 

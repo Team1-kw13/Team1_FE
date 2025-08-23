@@ -1,34 +1,12 @@
-// src/components/chatroom/place/PlaceGuide.jsx
-import { useEffect, useRef, useState } from "react";
 import PlaceMap from "./PlaceMap";
 import Recommend from "../recommend/Recommend";
-import webSocketService from "../../../service/websocketService";
+import { useMemo } from "react";
 
-export default function Place({ communityCenter }) {
-  const [officeInfo, setOfficeInfo] = useState(null);
-  const inited = useRef(false);
-
-  useEffect(() => {
-    const onOffice = (msg) => {
-      console.log("officeInfo 수신:", msg);
-      setOfficeInfo({ tel: msg.tel, pos: msg.pos });
-    };
-
-    // 1) type-only (원래대로)
-    webSocketService.on("officeInfo", onOffice);
-
-    // 2) 채널이 "sonju:officeInfo"로 오는 특수 케이스 대응
-    //    (handleMessage가 만드는 키와 동일하게 맞춰줌)
-    webSocketService.on("sonju:officeInfo", "officeInfo", onOffice); // exact
-    webSocketService.on("sonju:officeInfo", "*", onOffice);          // wildcard
-
-    return () => {
-      webSocketService.off("officeInfo", onOffice);
-      webSocketService.off("sonju:officeInfo", "officeInfo", onOffice);
-      webSocketService.off("sonju:officeInfo", "*", onOffice);
-    };
-  }, []);
-
+export default function Place({ communityCenter, phoneNumber, position }) {
+  const officeInfo = useMemo(() => {
+    if (!position || position.length < 2) return null;
+    return { tel: phoneNumber, pos: position };
+  }, [phoneNumber, position]);
 
   if (!officeInfo) return <div>불러오는중..</div>;
 
@@ -42,7 +20,7 @@ export default function Place({ communityCenter }) {
           <PlaceMap officeInfo={officeInfo} />
         </div>
       </div>
-      <Recommend text="가까운 동사무소 알려줘" />
+      {/*<Recommend text="가까운 동사무소 알려줘" />*/}
     </div>
   );
 }
