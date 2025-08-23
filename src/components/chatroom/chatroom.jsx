@@ -9,12 +9,14 @@ import SonjuListening from "./SonjuListening";
 import UserBubble from "./UserBubble";
 import webSocketService from "../../service/websocketService";
 
+
 export default function ChatRoom({ voiceStarted, voiceStopped, onRecognitionComplete }) {
   const [messages, setMessages] = useState([]);
   const [isAiResponding, setIsAiResponding] = useState(false);
   const [currentAiResponse, setCurrentAiResponse] = useState('');
   const [suggestedQuestions, setSuggestedQuestions] = useState([]);
   const [officeInfo, setOfficeInfo] = useState(null);
+  const [showCall, setShowCall] = useState(false);
   const {initialMessage} = useParams();
   const [isListening, setIsListening] = useState(false);
 
@@ -103,6 +105,13 @@ export default function ChatRoom({ voiceStarted, voiceStopped, onRecognitionComp
       });
     };
 
+    const handleCallIntent = (transcript) => {
+      setShowCall(true);
+      const ask = transcript || '가까운 동사무소 전화번호 알려줘';
+      setMessages(prev => [...prev, { type: 'user', content: ask, timestamp: new Date() }]);
+      webSocketService.sendText(ask);
+    };
+
     const handleSuggestedQuestions = (data) => {
       console.log('제안 질문들:', data);
       if (data.questions) {
@@ -176,12 +185,11 @@ export default function ChatRoom({ voiceStarted, voiceStopped, onRecognitionComp
 
         {officeInfo && (
           <>
-          <Place 
-            communityCenter="가까운 동사무소" 
-            position={officeInfo.pos}
-          />
+            <Place communityCenter="가까운 동사무소" position={officeInfo.pos} />
+            {showCall && <Call communityCenter="가까운 동사무소" number={officeInfo.tel} />}
           </>
         )}
+
 
         
         

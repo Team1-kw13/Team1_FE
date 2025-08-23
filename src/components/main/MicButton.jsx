@@ -52,7 +52,7 @@ async function stopAudioRecognition(stream, audioContext, processor) {
   } catch {}
 }
 
-export default function MicButton({ onListeningStart, onListeningStop, onTranscriptUpdate, currentStep }) {
+export default function MicButton({ onListeningStart, onListeningStop, onTranscriptUpdate, currentStep,onCallIntent }) {
   const [isRecording, setIsRecording] = useState(false);
   const audioSystemRef = useRef(null);
   //첫PCM청크가 서버에 도달하기 전에 stopSpeaking()을 안보내도록
@@ -77,6 +77,9 @@ export default function MicButton({ onListeningStart, onListeningStop, onTranscr
         console.log("🎤 브라우저 스피치 인식 결과:", transcript);
         onTranscriptUpdate?.(transcript);
         onListeningStop?.(transcript);
+        if (/전화번호|전화해|전화 걸어|전화/i.test(transcript)) {
+          onCallIntent?.(transcript);
+        }
       };
 
       rec.onerror = (event) => {
