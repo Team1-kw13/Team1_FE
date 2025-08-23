@@ -180,11 +180,6 @@ export default function ChatRoom({ voiceStarted, voiceStopped, onRecognitionComp
             communityCenter="가까운 동사무소" 
             position={officeInfo.pos}
           />
-
-          <Call 
-            communityCenter="가까운 동사무소" 
-            number={officeInfo.tel}
-          />
           </>
         )}
 
