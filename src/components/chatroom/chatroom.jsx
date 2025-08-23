@@ -157,14 +157,7 @@ export default function ChatRoom({ voiceStarted, voiceStopped, onRecognitionComp
 
     const handleOfficeInfo = (data) => {
       console.log('동사무소 정보:', data);
-      setOfficeInfo({
-        tel: data.tel,
-        position: data.pos
-      });
-      
-      // 현재 진행 중인 outputIndex에 대해 Place 표시
-      const currentIndex = Math.max(...Array.from(completedOutputIndexes), 0);
-      setShowPlaceForIndex(currentIndex);
+      setOfficeInfo({ tel: data.tel, pos: data.pos });
     };
 
     const handleError = (data) => {
@@ -174,16 +167,16 @@ export default function ChatRoom({ voiceStarted, voiceStopped, onRecognitionComp
 
     // 핸들러 등록
     webSocketService.on('openai:conversation', 'input_audio_transcript.done', handleUserVoiceComplete);
-    webSocketService.on('openai:conversation', 'response.text.delta', handleTextResponse);
-    webSocketService.on('openai:conversation', 'response.text.done', handleTextDone);
+    webSocketService.on('openai:conversation', 'response.audio_transcript.delta', handleTextResponse);
+    webSocketService.on('openai:conversation', 'response.done', handleTextDone);
     webSocketService.on('sonju:suggestedQuestion', 'suggestion.response', handleSuggestedQuestions);
     webSocketService.on('sonju:officeInfo', 'officeInfo', handleOfficeInfo);
     webSocketService.on('openai:error', handleError);
 
     return () => {
       webSocketService.off('openai:conversation', 'input_audio_transcript.done', handleUserVoiceComplete);
-      webSocketService.off('openai:conversation', 'response.text.delta', handleTextResponse);
-      webSocketService.off('openai:conversation', 'response.text.done', handleTextDone);
+      webSocketService.off('openai:conversation', 'response.audio_transcript.delta', handleTextResponse);
+      webSocketService.off('openai:conversation', 'response.done', handleTextDone);
       webSocketService.off('sonju:suggestedQuestion', 'suggestion.response', handleSuggestedQuestions);
       webSocketService.off('sonju:officeInfo', 'officeInfo', handleOfficeInfo);
       webSocketService.off('openai:error', handleError);
@@ -268,6 +261,17 @@ export default function ChatRoom({ voiceStarted, voiceStopped, onRecognitionComp
             outputIndex={currentOutputIndex}
           />
         )}
+
+        {officeInfo && (
+          <>
+          <Place 
+            communityCenter="가까운 동사무소" 
+            position={officeInfo.pos}
+          />
+          </>
+        )}
+
+        
         
         {/* 제안 질문들 - AI 응답 완료 후 표시 */}
         {shouldShowRecommendQuestions() && (
@@ -288,30 +292,7 @@ export default function ChatRoom({ voiceStarted, voiceStopped, onRecognitionComp
           </div>
         )}
         
-        {/* 동사무소 위치 정보 */}
-        {shouldShowPlace() && (
-          <Place 
-            communityCenter="가까운 동사무소" 
-            phoneNumber={officeInfo.tel}
-            position={officeInfo.position}
-          />
-        )}
-        
-        {/* 전화번호 정보 */}
-        {shouldShowCall() && (
-          <Call 
-            communityCenter="가까운 동사무소" 
-            number={officeInfo.tel} 
-          />
-        )}
-        
-        {/* 고정 추천 질문들 (임시) */}
-        <Recommend text="등본 발급 시 준비물은 뭐야?" onClick={() => handleQuestionClick("등본 발급 시 준비물은 뭐야?")} />
-        <Recommend text="영업 시간 알려줘" onClick={() => handleQuestionClick("영업 시간 알려줘")} />
-        <Recommend text="전화번호 알려줘" onClick={() => handleQuestionClick("전화번호 알려줘")} />
-        
-        {/* 대화 요약 - 일정 개수 이상 대화 후 표시 */}
-        {shouldShowSummary && <ChatSummary />}
+        <ChatSummary />
       </div>
       
       {/* 음성 듣기 중 표시 */}

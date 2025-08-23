@@ -53,12 +53,14 @@ function connect(url = import.meta.env.VITE_WEBSOCKET_URL) {
       
       ws.onmessage = function(event) {
         if (typeof event.data === 'string') {
-          const message = JSON.parse(event.data);
-          console.log("서버에서 받은 메시지:", message);
-          handleMessage(message);
+            const message = JSON.parse(event.data);
+            console.log ("서버에서 받은 string type 메세지: ", message);
+            handleMessage(message);
         } else if (event.data instanceof Blob) {
-          console.log("서버에서 받은 오디오 Blob:", event.data);
-          handleAudioBlob(event.data);
+            console.log ("서버에서 받은 오디오(Blob) 메세지: ", event.data);
+            handleMessage({ type: '', data: event.data});
+        } else {
+            console.log ("서버에서 JSON, Blob 이외의 type 메세지 수신: ", event.data);
         }
       };
       
@@ -292,8 +294,8 @@ function sendAudioPCM16(arrayBuffer) {
 //음성 발화 종료
 function stopSpeaking(hasAudio=true) {
   console.log('🛑 음성 발화 종료');
-  return send(CHANNEL, 'input_audio_buffer.end');
-  //if(hasAudio) send(CHANNEL,'input_audio_buffer.commit');
+  if(hasAudio) send(CHANNEL,'input_audio_buffer.commit');
+  return send(CHANNEL,'input_audio_buffer.end');
 }
 
 // 사전 정의된 프롬프트 전송
