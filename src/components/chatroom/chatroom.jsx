@@ -14,19 +14,9 @@ export default function ChatRoom({ voiceStarted, voiceStopped, onRecognitionComp
   const [isAiResponding, setIsAiResponding] = useState(false);
   const [currentAiResponse, setCurrentAiResponse] = useState('');
   const [suggestedQuestions, setSuggestedQuestions] = useState([]);
-  const [officeIntent, setOfficeIntent] = useState(null);
-  const [officeMapInfo, setOfficeMapInfo] = useState(null);
-  const [officeCallInfo, setOfficeCallInfo] = useState(null);
+  const [officeInfo, setOfficeInfo] = useState(null);
   const {initialMessage} = useParams();
   const [isListening, setIsListening] = useState(false);
-
-  //대답형태 조건부 
-  function detectOfficeIntent(text = '') {
-    const t = text.replace(/\s+/g, '').toLowerCase();
-    if (t.includes('전화번호')) return 'call';
-    if (t.includes('동사무소') || t.includes('주민센터') || t.includes('행정복지센터')) return 'map';
-    return null;
-  }
 
   // 🔥 음성 시작/중지 신호를 props로 받아서 처리
   useEffect(() => {
@@ -47,9 +37,6 @@ export default function ChatRoom({ voiceStarted, voiceStopped, onRecognitionComp
   useEffect(() => {
     if (initialMessage) {
       const decodedMessage = decodeURIComponent(initialMessage);
-      setOfficeIntent(detectOfficeIntent(decodedMessage));
-      setOfficeMapInfo(null);
-      setOfficeCallInfo(null);
       console.log('초기 메세지: ', decodedMessage);
 
       setMessages(prev => [...prev, {
@@ -80,9 +67,6 @@ export default function ChatRoom({ voiceStarted, voiceStopped, onRecognitionComp
       const text = (data?.transcript || "").trim();
       
       if (text) {
-        setOfficeIntent(detectOfficeIntent(text));
-        setOfficeMapInfo(null);
-        setOfficeCallInfo(null);
         setMessages(prev => [...prev, {
           type : 'user', 
           content: text, 
@@ -128,10 +112,7 @@ export default function ChatRoom({ voiceStarted, voiceStopped, onRecognitionComp
 
     const handleOfficeInfo = (data) => {
       console.log('동사무소 정보:', data);
-      const info = { tel: data.tel, pos: data.pos };
-      if (officeIntent === 'map')  setOfficeMapInfo(info);
-      if (officeIntent === 'call') setOfficeCallInfo(info);
-      setOfficeIntent(null); // 한 번 쓰고 초기화
+      setOfficeInfo({ tel: data.tel, pos: data.pos });
     };
 
     const handleError = (data) => {
@@ -160,9 +141,6 @@ export default function ChatRoom({ voiceStarted, voiceStopped, onRecognitionComp
   }, [onRecognitionComplete]);
 
   const handleQuestionClick = (question) => {
-    setOfficeIntent(detectOfficeIntent(question));
-    setOfficeMapInfo(null);
-    setOfficeCallInfo(null);
     setMessages(prev => [...prev, {
       type: 'user',
       content: question,
@@ -196,20 +174,22 @@ export default function ChatRoom({ voiceStarted, voiceStopped, onRecognitionComp
           <SonjuBubble text={currentAiResponse} isTyping={true} />
         )}
 
-        {officeMapInfo && (
-          <Place
-            communityCenter="가까운 동사무소"
-            position={officeMapInfo.pos}
+        {officeInfo && (
+          <>
+          <Place 
+            communityCenter="가까운 동사무소" 
+            position={officeInfo.pos}
           />
+
+          <Call 
+            communityCenter="가까운 동사무소" 
+            number={officeInfo.tel}
+          />
+          </>
         )}
 
-        {officeCallInfo && (
-          <Call
-            communityCenter="가까운 동사무소"
-            number={officeCallInfo.tel}
-          />
-        )}
-
+        
+        
         {suggestedQuestions.length > 0 && (
           <div className="mt-[40px] px-6">
             <div className="font-bold text-[#000000] text-[22px] mb-4">
