@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useParams } from "react-router-dom";
+import { useParams, useLocation } from "react-router-dom";
 import Call from "./call/CallGuide";
 import ChatSummary from "./chat_summary";
 import Place from "./place/PlaceGuide";
@@ -10,7 +10,6 @@ import UserBubble from "./UserBubble";
 import webSocketService from "../../service/websocketService";
 
 export default function ChatRoom({ voiceStarted, voiceStopped, onRecognitionComplete, transcriptFromPage }) {
-  const [messages, setMessages] = useState([]);
   const [isAiResponding, setIsAiResponding] = useState(false);
   const [currentAiResponse, setCurrentAiResponse] = useState('');
   const [currentOutputIndex, setCurrentOutputIndex] = useState(null);
@@ -19,20 +18,28 @@ export default function ChatRoom({ voiceStarted, voiceStopped, onRecognitionComp
   const [isListening, setIsListening] = useState(false);
   const [hasInitMessage, setHasInitMessage] = useState(false);
   
-  // 새로운 상태들 - 대화 흐름 관리
-  const [completedOutputIndexes, setCompletedOutputIndexes] = useState(new Set());
+  // 실시간 전사 상태
+  const [currentUserTranscript, setCurrentUserTranscript] = useState('');
+  
+  // 대화 흐름 관리
+  const [completedConversations, setCompletedConversations] = useState([]);
   const [showRecommendForIndex, setShowRecommendForIndex] = useState(null);
   const [showPlaceForIndex, setShowPlaceForIndex] = useState(null);
   const [showCallForIndex, setShowCallForIndex] = useState(null);
   const [shouldShowSummary, setShouldShowSummary] = useState(false);
   
-  const {initialMessage} = useParams();
+  // 완성된 AI 응답을 저장하는 상태
+  const [completedAiResponses, setCompletedAiResponses] = useState(new Map());
+  
+  const { initialMessage } = useParams();
+  const location = useLocation();
 
   // 음성 시작/중지 처리
   useEffect(() => {
     if (voiceStarted) {
       console.log('[ChatRoom] 음성 인식 시작됨');
       setIsListening(true);
+      setCurrentUserTranscript('');
     }
   }, [voiceStarted]);
 
@@ -43,111 +50,174 @@ export default function ChatRoom({ voiceStarted, voiceStopped, onRecognitionComp
     }
   }, [voiceStopped]);
 
-  //부모에서 전달된 transcript 처리
+  // 부모에서 전달된 transcript 처리
   useEffect(() => {
-  if (transcriptFromPage) {
-    const newOutputIndex = Math.max(...Array.from(completedOutputIndexes), -1) + 1;
-    setMessages(prev => [...prev, {
-      type: 'user',
-      content: transcriptFromPage,
-      timestamp: new Date(),
-      outputIndex: newOutputIndex
-    }]);
-    setShowRecommendForIndex(null);
-  }
-}, [transcriptFromPage]);
+    if (transcriptFromPage && transcriptFromPage.trim()) {
+      console.log('[ChatRoom] 부모에서 전달받은 transcript:', transcriptFromPage);
+      
+      const conversation = {
+        id: Date.now(),
+        userMessage: transcriptFromPage,
+        aiMessage: '',
+        isComplete: false,
+        timestamp: new Date()
+      };
+
+      setCompletedConversations(prev => [...prev, conversation]);
+      setShowRecommendForIndex(null);
+
+      // preprompt로 전송 -> 왜?????
+      setTimeout(() => {
+        if (webSocketService.isConnected) {
+          webSocketService.sendPrePrompt(transcriptFromPage);
+        }
+      }, 100);
+    }
+  }, [transcriptFromPage]);
 
   // 초기 메시지 처리
   useEffect(() => {
     if (initialMessage && !hasInitMessage) {
       const decodedMessage = decodeURIComponent(initialMessage);
-      console.log('초기 메세지: ', decodedMessage);
+      console.log('초기 메세지:', decodedMessage);
 
-      setMessages(prev => [...prev, {
-        type: 'user',
-        content: decodedMessage,
-        timestamp: new Date(),
-        outputIndex: 0
-      }]);
+      const conversation = {
+        id: Date.now(),
+        userMessage: decodedMessage,
+        aiMessage: '',
+        isComplete: false,
+        timestamp: new Date()
+      };
 
+      setCompletedConversations(prev => [...prev, conversation]);
       setHasInitMessage(true);
+
+      // preprompt로 전송
+      setTimeout(() => {
+        if (webSocketService.isConnected) {
+          webSocketService.sendPrePrompt(decodedMessage);
+        }
+      }, 500);
     }
   }, [initialMessage, hasInitMessage]);
 
-  // WebSocket 핸들러
+  // location.state에서 transcript 처리
+  useEffect(() => {
+    if (location.state?.transcript && !hasInitMessage) {
+      const transcript = location.state.transcript;
+      console.log('페이지에서 전달받은 transcript:', transcript);
+
+      const conversation = {
+        id: Date.now(),
+        userMessage: transcript,
+        aiMessage: '',
+        isComplete: false,
+        timestamp: new Date()
+      };
+
+      setCompletedConversations(prev => [...prev, conversation]);
+      setHasInitMessage(true);
+
+      // preprompt로 전송
+      setTimeout(() => {
+        if (webSocketService.isConnected) {
+          webSocketService.sendPrePrompt(transcript);
+        }
+      }, 500);
+    }
+  }, [location.state, hasInitMessage]);
+
+  // WebSocket 핸들러 설정 - 의존성 최소화
   useEffect(() => {
     if (!webSocketService.isConnected) {
       webSocketService.connect(import.meta.env.VITE_WEBSOCKET_URL);
     }
     
-    const handleUserVoiceComplete = (data) => {
-      const text = (data?.transcript || "").trim();
-      
-      if (text) {
-        // 새로운 outputIndex 계산
-        const newOutputIndex = Math.max(...Array.from(completedOutputIndexes), -1) + 1;
-        
-        setMessages(prev => [...prev, {
-          type: 'user', 
-          content: text, 
-          timestamp: new Date(),
-          outputIndex: newOutputIndex
-        }]);
-        
-        // Recommend 숨김 (새로운 음성 입력 시)
-        setShowRecommendForIndex(null);
+    // 사용자 음성 -> 텍스트 변환 실시간 (delta)
+    const handleInputAudioTranscriptDelta = (data) => {
+      console.log('사용자 음성 전사 delta:', data);
+      if (data.delta) {
+        setCurrentUserTranscript(prev => prev + data.delta);
       }
-      setIsListening(false);
-      onRecognitionComplete?.(text);
     };
 
-    const handleTextResponse = (data) => {
-      console.log('GPT 텍스트 응답:', data);
+    // 사용자 음성 -> 텍스트 변환 완료 (done)
+    const handleInputAudioTranscriptDone = (data) => {
+      console.log('사용자 음성 전사 완료:', data);
+      
+      setCurrentUserTranscript(currentTranscript => {
+        const finalTranscript = currentTranscript.trim();
+        if (finalTranscript) {
+          const conversation = {
+            id: Date.now(),
+            userMessage: finalTranscript,
+            aiMessage: '',
+            isComplete: false,
+            timestamp: new Date(),
+            outputIndex: data.output_index
+          };
+          
+          setCompletedConversations(prev => [...prev, conversation]);
+          setShowRecommendForIndex(null);
+          onRecognitionComplete?.(finalTranscript);
+        }
+        
+        setIsListening(false);
+        return '';
+      });
+    };
+
+    // AI 텍스트 응답 실시간 (delta) - 올바른 핸들러
+    const handleTextResponseDelta = (data) => {
+      console.log('AI 텍스트 응답 delta:', data);
       if (data.delta) {
         setIsAiResponding(true);
-        setCurrentOutputIndex(data.outputIndex);
+        setCurrentOutputIndex(data.output_index);
         setCurrentAiResponse(prev => prev + data.delta);
       }
     };
 
-    const handleTextDone = (data) => {
-      console.log('GPT 응답 완료');
-      setIsAiResponding(false);
+    // AI 텍스트 응답 완료 (done)
+    const handleTextResponseDone = (data) => {
+      console.log('AI 텍스트 응답 완료:', data);
       
-      setMessages(prev => {
-        const updated = [...prev];
-        const aiMessageIndex = updated.findIndex(
-          msg => msg.type === "ai" && msg.outputIndex === data.output_index
+      setCurrentAiResponse(finalResponse => {
+        // 완성된 응답을 Map에 저장
+        setCompletedAiResponses(prev => new Map(prev.set(data.output_index, finalResponse)));
+        
+        // 대화 업데이트
+        setCompletedConversations(prev => 
+          prev.map(conv => 
+            conv.outputIndex === data.output_index || (!conv.outputIndex && conv.id === prev[prev.length - 1]?.id)
+              ? { 
+                  ...conv, 
+                  aiMessage: finalResponse, 
+                  isComplete: true,
+                  outputIndex: data.output_index 
+                }
+              : conv
+          )
         );
 
-        if (aiMessageIndex >= 0) {
-          updated[aiMessageIndex].content += currentAiResponse;
-        } else {
-          updated.push({
-            type: "ai",
-            content: currentAiResponse,
-            outputIndex: data.output_index,
-            timestamp: new Date(),
-          });
-        }
-        return updated;
+        // AI 응답 완료 후 추천 질문 표시
+        setShowRecommendForIndex(data.output_index);
+        
+        // 대화가 일정 개수 이상이면 summary 표시
+        setCompletedConversations(prevConvs => {
+          if (prevConvs.length >= 2) {
+            setShouldShowSummary(true);
+          }
+          return prevConvs;
+        });
+
+        setCurrentOutputIndex(null);
+        setIsAiResponding(false);
+        
+        //return ''; // 현재 응답 초기화
       });
-
-      // 완료된 outputIndex 추가
-      setCompletedOutputIndexes(prev => new Set([...prev, data.output_index]));
-      
-      // AI 응답 완료 후 Recommend 표시
-      setShowRecommendForIndex(data.output_index);
-      
-      // 대화가 일정 개수 이상이면 summary 표시
-      if (data.output_index >= 3) {
-        setShouldShowSummary(true);
-      }
-
-      setCurrentAiResponse('');
-      setCurrentOutputIndex(null);
     };
 
+    // 제안 질문 수신
     const handleSuggestedQuestions = (data) => {
       console.log('제안 질문들:', data);
       if (data.questions) {
@@ -155,78 +225,74 @@ export default function ChatRoom({ voiceStarted, voiceStopped, onRecognitionComp
       }
     };
 
+    // 동사무소 정보 수신
     const handleOfficeInfo = (data) => {
       console.log('동사무소 정보:', data);
-      setOfficeInfo({ tel: data.tel, pos: data.pos });
+      setOfficeInfo({
+        tel: data.tel,
+        position: data.pos
+      });
+      
+      // 현재 대화에 대해 Place 표시
+      setCompletedConversations(prevConvs => {
+        if (prevConvs.length > 0) {
+          const lastConv = prevConvs[prevConvs.length - 1];
+          setShowPlaceForIndex(lastConv.outputIndex || lastConv.id);
+        }
+        return prevConvs;
+      });
     };
 
+    // 에러 처리
     const handleError = (data) => {
       console.error('서버 에러:', data);
-      alert(`오류가 발생했습니다: ${data.message}`);
+      alert(`오류가 발생했습니다: ${data.message || data.error}`);
+      setIsAiResponding(false);
     };
 
-    // 핸들러 등록
-    webSocketService.on('openai:conversation', 'input_audio_transcript.done', handleUserVoiceComplete);
-    webSocketService.on('openai:conversation', 'response.audio_transcript.delta', handleTextResponse);
-    webSocketService.on('openai:conversation', 'response.done', handleTextDone);
+    // 핸들러 등록 - 올바른 이벤트 타입 사용
+    webSocketService.on('openai:conversation', 'input_audio_transcript.delta', handleInputAudioTranscriptDelta);
+    webSocketService.on('openai:conversation', 'input_audio_transcript.done', handleInputAudioTranscriptDone);
+    webSocketService.on('openai:conversation', 'response.text.delta', handleTextResponseDelta); // 텍스트 응답
+    webSocketService.on('openai:conversation', 'response.text.done', handleTextResponseDone);
+    webSocketService.on('openai:conversation','response.audio_transcript.delta',handleTextResponseDelta);
     webSocketService.on('sonju:suggestedQuestion', 'suggestion.response', handleSuggestedQuestions);
     webSocketService.on('sonju:officeInfo', 'officeInfo', handleOfficeInfo);
     webSocketService.on('openai:error', handleError);
 
     return () => {
-      webSocketService.off('openai:conversation', 'input_audio_transcript.done', handleUserVoiceComplete);
-      webSocketService.off('openai:conversation', 'response.audio_transcript.delta', handleTextResponse);
-      webSocketService.off('openai:conversation', 'response.done', handleTextDone);
+      // 핸들러 제거
+      webSocketService.off('openai:conversation', 'input_audio_transcript.delta', handleInputAudioTranscriptDelta);
+      webSocketService.off('openai:conversation', 'input_audio_transcript.done', handleInputAudioTranscriptDone);
+      webSocketService.off('openai:conversation', 'response.text.delta', handleTextResponseDelta);
+      webSocketService.off('openai:conversation', 'response.text.done', handleTextResponseDone);
+      webSocketService.off('openai:conversation','response.audio_transcript.delta', handleTextResponseDelta);
       webSocketService.off('sonju:suggestedQuestion', 'suggestion.response', handleSuggestedQuestions);
       webSocketService.off('sonju:officeInfo', 'officeInfo', handleOfficeInfo);
       webSocketService.off('openai:error', handleError);
-    };    
-  }, [onRecognitionComplete, currentAiResponse, completedOutputIndexes]);
+    };
+  }, []); // 빈 의존성 배열
 
-  // Recommend 클릭 처리
+  // 추천 질문 클릭 처리
   const handleQuestionClick = (question) => {
-    // 새로운 outputIndex 계산
-    const newOutputIndex = Math.max(...Array.from(completedOutputIndexes), -1) + 1;
+    const conversation = {
+      id: Date.now(),
+      userMessage: question,
+      aiMessage: '',
+      isComplete: false,
+      timestamp: new Date()
+    };
     
-    setMessages(prev => [...prev, {
-      type: 'user',
-      content: question,
-      timestamp: new Date(),
-      outputIndex: newOutputIndex
-    }]);
-    
-    // Recommend 숨김
+    setCompletedConversations(prev => [...prev, conversation]);
     setShowRecommendForIndex(null);
     setSuggestedQuestions([]);
-  };
 
-  // 전화번호 관련 발화 감지 (간단한 키워드 검사)
-  useEffect(() => {
-    if (officeInfo && showPlaceForIndex !== null) {
-      const latestUserMessage = messages
-        .filter(msg => msg.type === 'user')
-        .slice(-1)[0];
-      
-      if (latestUserMessage && 
-          (latestUserMessage.content.includes('전화') || 
-           latestUserMessage.content.includes('번호') ||
-           latestUserMessage.content.includes('연락'))) {
-        setShowCallForIndex(latestUserMessage.outputIndex);
+    // 서버에 전송
+    setTimeout(() => {
+      if (webSocketService.isConnected) {
+        webSocketService.sendPrePrompt(question);
       }
-    }
-  }, [messages, officeInfo, showPlaceForIndex]);
-
-  // 컴포넌트별 표시 조건 함수
-  const shouldShowRecommendQuestions = () => {
-    return showRecommendForIndex !== null && suggestedQuestions.length > 0;
-  };
-
-  const shouldShowPlace = () => {
-    return showPlaceForIndex !== null && officeInfo;
-  };
-
-  const shouldShowCall = () => {
-    return showCallForIndex !== null && officeInfo;
+    }, 100);
   };
 
   return (
@@ -239,63 +305,93 @@ export default function ChatRoom({ voiceStarted, voiceStopped, onRecognitionComp
         </div>
       </div>
       
-      <div className="flex-1 overflow-y-auto pb-[90px] w-full">     
-        {messages.map((message, index) => (
-          <div key={`${message.outputIndex}-${message.type}-${index}`}>
-            {message.type === 'user' ? (
-              <UserBubble text={message.content} />
-            ) : (
+      <div className="flex-1 overflow-y-auto pb-[90px] w-full">
+        {/* 완료된 대화들 표시 */}
+        {completedConversations.map((conversation) => (
+          <div key={`conversation-${conversation.id}`} className="conversation-block">
+            {/* 사용자 메시지 */}
+            <UserBubble text={conversation.userMessage} />
+            
+            {/* AI 메시지 - 완성된 응답만 표시 */}
+            {conversation.aiMessage && (
               <SonjuBubble 
-                text={message.content} 
-                outputIndex={message.outputIndex}
+                text={conversation.aiMessage} 
+                outputIndex={conversation.outputIndex}
+                isTyping={false}
+              />
+            )}
+            
+            {/* 해당 대화에 대한 제안 질문들 */}
+            {showRecommendForIndex === (conversation.outputIndex || conversation.id) && 
+             suggestedQuestions.length > 0 && (
+              <div className="mt-[20px]">
+                <div className="font-bold text-[#000000] text-[22px] mb-4 px-6">
+                  다음 대화는 어떠세요?
+                </div>
+                <div className="flex flex-wrap gap-[16px] px-6">
+                  {suggestedQuestions.map((question, index) => (
+                    <Recommend 
+                      key={`question-${conversation.id}-${index}`}
+                      text={question}
+                      type="question"
+                      onClick={() => handleQuestionClick(question)}
+                    />
+                  ))}
+                </div>
+              </div>
+            )}
+            
+            {/* 동사무소 위치 정보 */}
+            {showPlaceForIndex === (conversation.outputIndex || conversation.id) && officeInfo && (
+              <Place 
+                key={`place-${conversation.id}`}
+                communityCenter="가까운 동사무소" 
+                phoneNumber={officeInfo.tel}
+                position={officeInfo.position}
+              />
+            )}
+            
+            {/* 전화번호 정보 */}
+            {showCallForIndex === (conversation.outputIndex || conversation.id) && officeInfo && (
+              <Call 
+                key={`call-${conversation.id}`}
+                communityCenter="가까운 동사무소" 
+                number={officeInfo.tel} 
               />
             )}
           </div>
         ))}
         
-        {/* AI 응답 중 표시 */}
-        {isAiResponding && currentAiResponse && (
-          <SonjuBubble 
-            text={currentAiResponse} 
-            isTyping={true}
-            outputIndex={currentOutputIndex}
-          />
-        )}
-
-        {officeInfo && (
-          <>
-          <Place 
-            communityCenter="가까운 동사무소" 
-            position={officeInfo.pos}
-          />
-          </>
-        )}
-
-        
-        
-        {/* 제안 질문들 - AI 응답 완료 후 표시 */}
-        {shouldShowRecommendQuestions() && (
-          <div className="mt-[20px]">
-            <div className="font-bold text-[#000000] text-[22px] mb-4 px-6">
-              다음 대화는 어떠세요?
-            </div>
-            <div className="flex flex-wrap gap-[16px] px-6">
-              {suggestedQuestions.map((question, index) => (
-                <Recommend 
-                  key={index}
-                  text={question}
-                  type="question"
-                  onClick={() => handleQuestionClick(question)}
-                />
-              ))}
-            </div>
+        {/* 현재 진행 중인 사용자 음성 전사 */}
+        {currentUserTranscript && (
+          <div className="conversation-block">
+            <UserBubble text={currentUserTranscript} />
           </div>
         )}
         
-        <ChatSummary />
+        {/* 현재 AI 응답 중 표시 */}
+        {isAiResponding && currentAiResponse && (
+          <div className="conversation-block">
+            <SonjuBubble 
+              text={currentAiResponse} 
+              isTyping={true}
+              outputIndex={currentOutputIndex}
+            />
+          </div>
+        )}
+        
+        {/* 대화 요약 */}
+        {shouldShowSummary && <ChatSummary />}
       </div>
+
+      {/* 사용자 음성 실시간 전사 표시 */}
+      {/* {isListening && currentUserTranscript && (
+        <div className="px-6 py-2 bg-gray200 text-gray600 text-sm">
+          음성 인식 중: {currentUserTranscript}
+        </div>
+      )} */}
       
-      {/* 음성 듣기 중 표시 */}
+      {/* 음성 인식 중 표시 */}
       {isListening && (
         <div className="absolute bottom-0 w-full flex justify-center z-40">
           <SonjuListening />

@@ -80,7 +80,8 @@ export default function MicButton({
   //첫PCM청크가 서버에 도달하기 전에 stopSpeaking()을 안보내도록
   const hasAudioRef=useRef(false); 
   const stoppingRef = useRef(false);
-  
+  const audioDataCountRef = useRef(0);
+
   // 브라우저 스피치 인식 추가
   const recognitionRef = useRef(null);
   const recogActiveRef = useRef(false);
@@ -139,15 +140,21 @@ export default function MicButton({
 
       setIsRecording(true);
       onListeningStart?.();
+      hasAudioRef.current = false;
+      audioDataCountRef.current = 0;
 
       // 1단계: 서버에 음성 발화 시작 알림 (commit)
-      const commitSent = webSocketService.startSpeaking();
-      console.log("📤 input_audio_buffer.commit 전송:", commitSent);
+      //const commitSent = webSocketService.startSpeaking();
+      //console.log("📤 input_audio_buffer.commit 전송:", commitSent);
+      webSocketService.startSpeaking();
 
       // 2단계: 오디오 캡처 시작 및 실시간 전송
       const audioSystem = await startAudioCapture((arrayBuffer) => {
         const sent = webSocketService.sendAudioPCM16(arrayBuffer);
-        if (sent) hasAudioRef.current = true;
+        if (sent) {
+          hasAudioRef.current = true;
+          audioDataCountRef.current++;
+        }
       });
       audioSystemRef.current = audioSystem;
 
@@ -196,6 +203,7 @@ export default function MicButton({
     console.log("📤 input_audio_buffer.end 전송:", endSent);
     
     hasAudioRef.current = false;
+    audioDataCountRef.current = 0;
     stoppingRef.current = false;
 
     // 상위 컴포넌트에 중지 알림

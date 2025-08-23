@@ -24,7 +24,7 @@ export default function ChatRoomPage() {
   const handleRecognitionComplete = (finalText) => {
     setIsListening(false);
     setVoiceStopped(prev => prev + 1);
-    if (finalText) setLatestTranscript(finalText); //메인 -> 채팅창 음성 인식 결과 전달
+    //if (finalText) setLatestTranscript(finalText); //메인 -> 채팅창 음성 인식 결과 전달
   }
 
   return (
