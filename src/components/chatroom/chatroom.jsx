@@ -175,12 +175,20 @@ export default function ChatRoom({ voiceStarted, voiceStopped, onRecognitionComp
         )}
 
         {officeInfo && (
+          <>
           <Place 
             communityCenter="가까운 동사무소" 
-            phoneNumber={officeInfo.tel}
             position={officeInfo.pos}
           />
+
+          <Call 
+            communityCenter="가까운 동사무소" 
+            number={officeInfo.tel}
+          />
+          </>
         )}
+
+        
         
         {suggestedQuestions.length > 0 && (
           <div className="mt-[40px] px-6">
