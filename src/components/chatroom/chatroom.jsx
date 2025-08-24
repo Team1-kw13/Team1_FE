@@ -65,7 +65,7 @@ export default function ChatRoom({ voiceStarted, voiceStopped, onRecognitionComp
       }]);
 
       setHasInitMessage(true);
-
+      webSocketService.sendText(decodedMessage);
       // setTimeout(() => {
       //   if (webSocketService.isConnected) {
       //     webSocketService.sendText(decodedMessage);
