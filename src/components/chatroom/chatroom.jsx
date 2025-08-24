@@ -39,6 +39,7 @@ export default function ChatRoom({ voiceStarted, voiceStopped, onRecognitionComp
     if (voiceStarted) {
       console.log('ChatRoom: 음성 인식 시작됨');
       setIsListening(true);
+      try { webSocketService.resumeAudioContextIfNeeded?.(); } catch {}
     }
   }, [voiceStarted]);
 

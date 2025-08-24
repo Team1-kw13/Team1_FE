@@ -6,8 +6,30 @@ let messageHandlers = {};
 let connectionAttempts = 0;
 let sessionReady=false;
 let readyWaiters=[];
+let audioContext = null;
+let audioQueue = [];
+let isPlayingAudio = false;
 const maxConnectionAttempts = 3;
 const CHANNEL='openai:conversation';
+
+function ensureAudio() {
+  if (!audioContext) {
+    // 24kHz로 내려오면 sampleRate를 맞춰주는 게 베스트(모르면 기본값도 OK)
+    try {
+      audioContext = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 24000 });
+    } catch {
+      audioContext = new (window.AudioContext || window.webkitAudioContext)();
+    }
+  }
+}
+
+// 사용자 제스처 직후(버튼 클릭/마이크 시작 등) 반드시 호출
+async function resumeAudioContextIfNeeded() {
+  ensureAudio();
+  if (audioContext && audioContext.state === 'suspended') {
+    try { await audioContext.resume(); } catch {}
+  }
+}
 
 // WebSocket 연결
 function connect(url = import.meta.env.VITE_WEBSOCKET_URL) {
@@ -40,6 +62,7 @@ function connect(url = import.meta.env.VITE_WEBSOCKET_URL) {
   return new Promise((resolve, reject) => {
     try {
       ws = new WebSocket(url); // 소켓 연결
+      ws.binaryType = 'arraybuffer';
       
       ws.onopen = function() { // 소켓이 열림 = 연결 성공
         console.log('✅ WebSocket 연결 성공');
@@ -62,6 +85,8 @@ function connect(url = import.meta.env.VITE_WEBSOCKET_URL) {
             const message = JSON.parse(event.data);
             console.log ("서버에서 받은 string type 메세지: ", message);
             handleMessage(message);
+        } else if (event.data instanceof ArrayBuffer) {
+          handleMessageBinary(event.data);
         } else if (event.data instanceof Blob) {
             console.log ("서버에서 받은 오디오(Blob) 메세지: ", event.data);
             handleMessageBlob({ type: '', data: event.data});
@@ -167,37 +192,49 @@ async function handleAudioBlob(blob) {
   }
 }
 
+ async function handleMessageBlob(blob) {
+   try {
+     const arrayBuffer = await blob.arrayBuffer();
+     await handleMessageBinary(arrayBuffer);
+   } catch (e) {
+     console.error('Blob 처리 실패:', e);
+   }
+ }
+
+ async function handleMessageBinary(arrayBuffer) {
+   const bytes = new Uint8Array(arrayBuffer);
+   const isRIFF = bytes[0] === 0x52 && bytes[1] === 0x49 && bytes[2] === 0x46 && bytes[3] === 0x46; // 'RIFF'
+   const isOgg  = bytes[0] === 0x4F && bytes[1] === 0x67 && bytes[2] === 0x67 && bytes[3] === 0x53; // 'OggS'
+   const isID3  = bytes[0] === 0x49 && bytes[1] === 0x44 && bytes[2] === 0x33;                       // 'ID3'
+
+   await resumeAudioContextIfNeeded();
+   if (!audioContext) return;
+
+   try {
+     if (isRIFF || isOgg || isID3) {
+       await playAudioBuffer(arrayBuffer);
+       return;
+     }
+     await playAudioBuffer(arrayBuffer); // 브라우저가 코덱 추론 가능 시
+   } catch (e) {
+     console.warn('decodeAudioData 실패 → PCM 폴백 시도:', e);
+     await playPCMAudio(arrayBuffer); // 24kHz mono PCM16 가정
+   }
+ }
+
+
 // PCM 오디오 직접 재생
 async function playPCMAudio(arrayBuffer) {
-  if (!audioContext) {
-    console.warn('오디오 컨텍스트가 초기화되지 않음');
-    return;
-  }
-  
+  if (!audioContext) return;
   try {
-    // 오디오 컨텍스트가 suspended 상태라면 재개
-    if (audioContext.state === 'suspended') {
-      await audioContext.resume();
-    }
-    
-    // PCM 16비트 데이터를 Float32Array로 변환
-    const pcmData = new Int16Array(arrayBuffer);
-    const floatData = new Float32Array(pcmData.length);
-    
-    for (let i = 0; i < pcmData.length; i++) {
-      floatData[i] = pcmData[i] / 32768; // 16비트를 -1~1 범위로 정규화
-    }
-    
-    // AudioBuffer 생성
-    const audioBuffer = audioContext.createBuffer(1, floatData.length, 24000);
-    audioBuffer.getChannelData(0).set(floatData);
-    
-    // 재생 큐에 추가
-    audioQueue.push(audioBuffer);
-    
-    if (!isPlayingAudio) {
-      playNextAudio();
-    }
+    const pcm = new Int16Array(arrayBuffer);
+    const f32 = new Float32Array(pcm.length);
+    for (let i = 0; i < pcm.length; i++) f32[i] = Math.max(-1, Math.min(1, pcm[i] / 32768));
+    const sampleRate = 24000;
+    const buf = audioContext.createBuffer(1, f32.length, sampleRate);
+    buf.getChannelData(0).set(f32);
+    audioQueue.push(buf);
+    if (!isPlayingAudio) playNextAudio();
   } catch (error) {
     console.error('PCM 오디오 재생 실패:', error);
   }
@@ -206,37 +243,28 @@ async function playPCMAudio(arrayBuffer) {
 // 오디오 재생
 async function playAudioBuffer(arrayBuffer) {
   if (!audioContext) return;
-  
   try {
-    const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
+    const audioBuffer = await audioContext.decodeAudioData(arrayBuffer.slice(0));
     audioQueue.push(audioBuffer);
-    
-    if (!isPlayingAudio) {
-      playNextAudio();
-    }
+    if (!isPlayingAudio) playNextAudio();
   } catch (error) {
     console.error('오디오 디코딩 실패:', error);
+    throw error;
   }
+  
 }
 
 async function playNextAudio() {
-  if (audioQueue.length === 0) {
-    isPlayingAudio = false;
-    return;
-  }
-  
+  if (audioQueue.length === 0) { isPlayingAudio = false; return; }
   isPlayingAudio = true;
-  const audioBuffer = audioQueue.shift();
-  
   const source = audioContext.createBufferSource();
-  source.buffer = audioBuffer;
+  source.buffer = audioQueue.shift();
   source.connect(audioContext.destination);
-  
-  source.onended = () => {
-    playNextAudio();
-  };
-  
-  source.start();
+  source.onended = () => playNextAudio();
+  try { source.start(); } catch (e) {
+    console.error('오디오 시작 실패:', e);
+    isPlayingAudio = false;
+  }
 }
 
 // 핸들러 등록 (중복 방지)
@@ -328,12 +356,13 @@ function startSpeaking() {
 
 // 사용자 음성 발화
 // PCM16 ArrayBuffer(또는 Int16Array.buffer)를 그대로 보냄?
-function sendAudioPCM16(base64AudioData) {
+function sendAudioPCM16(arrayBuffer) {
   if (!ws || ws.readyState !== WebSocket.OPEN) return false;
   try {
-    // ArrayBuffer를 base64로 인코딩
-    const uint8Array = new Uint8Array(arrayBuffer);
-    const base64 = btoa(String.fromCharCode.apply(null, uint8Array));
+    const uint8 = new Uint8Array(arrayBuffer);
+    let s = '';
+    for (let i = 0; i < uint8.length; i++) s += String.fromCharCode(uint8[i]);
+    const base64 = btoa(s);
     
     return send(CHANNEL, 'input_audio_buffer.append', {
       audio_buffer: base64
@@ -459,6 +488,7 @@ const webSocketService = {
   selectPrePrompt: selectPrePrompt,
   sendText:sendText,
   playAudioBuffer,
+  resumeAudioContextIfNeeded,
   
   // 요약 관련
   requestSummary: requestSummary,
