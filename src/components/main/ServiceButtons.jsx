@@ -6,7 +6,7 @@ export default function ServiceButtons() {
   const navigate = useNavigate();
 
   const handleServiceClick = (content) => {
-    webSocketService.sendPrePrompt(content);
+    webSocketService.selectPrePrompt(content);
     navigate(`/chatroompage/${encodeURIComponent(content)}`);
   };
 
