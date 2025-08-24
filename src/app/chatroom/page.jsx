@@ -27,6 +27,11 @@ export default function ChatRoomPage() {
     //if (finalText) setLatestTranscript(finalText); //메인 -> 채팅창 음성 인식 결과 전달
   }
 
+  const handleCallIntent = (transcript) => {
+    console.log('ChatRoomPage: 전화 의도 감지:', transcript);
+    // ChatRoom에서 처리하므로 여기서는 로깅만
+  };
+
   return (
     <div className="flex flex-col h-screen w-full max-w-[430px]">
       <Header />
@@ -44,7 +49,7 @@ export default function ChatRoomPage() {
           voiceStarted={voiceStarted}
           voiceStopped={voiceStopped}
           onRecognitionComplete={handleRecognitionComplete}
-          transcriptFromPage={latestTranscript}
+//          transcriptFromPage={latestTranscript}
         />
       </div>
 
@@ -52,6 +57,7 @@ export default function ChatRoomPage() {
         isInChatRoom={true}
         onListeningStart={handleChatRoomVoiceStart}
         onListeningStop={handleChatRoomVoiceStop}
+        onCallIntent={handleCallIntent}
         currentStep={isListening ? 'listening' : 'intro'}
       />
     </div>

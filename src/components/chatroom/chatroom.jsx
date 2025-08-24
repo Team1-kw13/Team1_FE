@@ -9,259 +9,355 @@ import SonjuListening from "./SonjuListening";
 import UserBubble from "./UserBubble";
 import webSocketService from "../../service/websocketService";
 
-
-export default function ChatRoom({ voiceStarted, voiceStopped, onRecognitionComplete,transcriptFromPage }) {
-  const [messages, setMessages] = useState([]);
-  const [isAiResponding, setIsAiResponding] = useState(false);
-  const [currentAiResponse, setCurrentAiResponse] = useState('');
-  const [currentOutputIndex, setCurrentOutputIndex] = useState(null);
-  const [suggestedQuestions, setSuggestedQuestions] = useState([]);
-  const [officeInfo, setOfficeInfo] = useState(null);
-  const [showCall, setShowCall] = useState(false);
-  const {initialMessage} = useParams();
-  const [isListening, setIsListening] = useState(false);
-  const [hasInitMessage, setHasInitMessage] = useState(false);
+export default function ChatRoom({ voiceStarted, voiceStopped, onRecognitionComplete }) {
+  // ===== 핵심 상태: output_index 기반 대화 관리 =====
+  const [conversations, setConversations] = useState(new Map());
+  // 🔧 수정: output_index를 서버에서 받은 값으로 관리
+  const [pendingInitialMessage, setPendingInitialMessage] = useState(null);
   
-  // 실시간 전사 상태
+  // ===== 현재 진행 상태 =====
+  const [isListening, setIsListening] = useState(false);
+  const [isAiResponding, setIsAiResponding] = useState(false);
   const [currentUserTranscript, setCurrentUserTranscript] = useState('');
   
-  // 대화 흐름 관리
-  const [completedConversations, setCompletedConversations] = useState([]);
-  const [showRecommendForIndex, setShowRecommendForIndex] = useState(null);
+  // ===== UI 표시용 상태 =====
+  const [suggestedQuestions, setSuggestedQuestions] = useState([]);
+  const [showSuggestionsForIndex, setShowSuggestionsForIndex] = useState(null);
+  
+  // ===== 특수 기능 상태 =====
+  const [officeInfo, setOfficeInfo] = useState(null);
   const [showPlaceForIndex, setShowPlaceForIndex] = useState(null);
   const [showCallForIndex, setShowCallForIndex] = useState(null);
-  const [shouldShowSummary, setShouldShowSummary] = useState(false);
   
-  // 완성된 AI 응답을 저장하는 상태
-  const [completedAiResponses, setCompletedAiResponses] = useState(new Map());
+  // ===== 기존 props/params =====
+  const { initialMessage } = useParams();
   const location = useLocation();
+  const [hasProcessedInitialMessage, setHasProcessedInitialMessage] = useState(false);
 
-  // 전역 “전화 의도” 이벤트 수신
+  // ===== 대화 관리 헬퍼 함수들 =====
+  
+  /**
+   * 🔧 수정: 서버 응답을 받을 때 대화를 생성하거나 업데이트
+   */
+  const ensureConversationExists = (outputIndex, userMessage = null) => {
+    setConversations(prev => {
+      const updated = new Map(prev);
+      
+      if (!updated.has(outputIndex)) {
+        // 새로운 대화 생성
+        const newConversation = {
+          id: Date.now(),
+          outputIndex: outputIndex,
+          userMessage: userMessage || '처리 중...',
+          userMessageComplete: userMessage ? true : false,
+          aiMessage: '',
+          aiTextComplete: false,
+          aiAudioComplete: false,
+          timestamp: new Date(),
+        };
+        
+        updated.set(outputIndex, newConversation);
+        console.log(`새 대화 생성: output_index=${outputIndex}, message="${userMessage}"`);
+      }
+      
+      return updated;
+    });
+    
+    return outputIndex;
+  };
+
+  /**
+   * 사용자 메시지 업데이트
+   */
+  const updateUserMessage = (outputIndex, transcript) => {
+    ensureConversationExists(outputIndex);
+    
+    setConversations(prev => {
+      const updated = new Map(prev);
+      const conversation = updated.get(outputIndex);
+      if (conversation) {
+        updated.set(outputIndex, {
+          ...conversation,
+          userMessage: transcript,
+          userMessageComplete: false,
+        });
+      }
+      return updated;
+    });
+  };
+
+  /**
+   * 사용자 메시지 완료 처리
+   */
+  const completeUserMessage = (outputIndex, finalTranscript) => {
+    ensureConversationExists(outputIndex, finalTranscript);
+    
+    setConversations(prev => {
+      const updated = new Map(prev);
+      const conversation = updated.get(outputIndex);
+      if (conversation) {
+        updated.set(outputIndex, {
+          ...conversation,
+          userMessage: finalTranscript,
+          userMessageComplete: true,
+        });
+      }
+      return updated;
+    });
+    console.log(`사용자 메시지 완료: output_index=${outputIndex}, message="${finalTranscript}"`);
+  };
+
+  /**
+   * AI 메시지 업데이트 (실시간)
+   */
+  const updateAiMessage = (outputIndex, deltaText) => {
+    ensureConversationExists(outputIndex);
+    
+    setConversations(prev => {
+      const updated = new Map(prev);
+      const conversation = updated.get(outputIndex);
+      if (conversation) {
+        updated.set(outputIndex, {
+          ...conversation,
+          aiMessage: (conversation.aiMessage || '') + deltaText,
+        });
+      }
+      return updated;
+    });
+  };
+
+  /**
+   * AI 응답 완료 처리
+   */
+  const completeAiResponse = (outputIndex, responseType) => {
+    setConversations(prev => {
+      const updated = new Map(prev);
+      const conversation = updated.get(outputIndex);
+      if (conversation) {
+        const updatedConversation = { ...conversation };
+        
+        if (responseType === 'text') {
+          updatedConversation.aiTextComplete = true;
+        } else if (responseType === 'audio') {
+          updatedConversation.aiAudioComplete = true;
+        } else if (responseType === 'audio_transcript') {
+          updatedConversation.aiTextComplete = true;
+        }
+        
+        updated.set(outputIndex, updatedConversation);
+      }
+      return updated;
+    });
+    
+    console.log(`AI 응답 완료: output_index=${outputIndex}, type=${responseType}`);
+    
+    // 🔧 수정: 중복 요청 방지
+    const conversation = conversations.get(outputIndex);
+    if (conversation && (conversation.aiTextComplete || responseType === 'text' || responseType === 'audio_transcript')) {
+      if (showSuggestionsForIndex !== outputIndex) {
+        setShowSuggestionsForIndex(outputIndex);
+        
+        // 🔧 수정: 타임아웃 시간 증가 및 중복 방지
+        setTimeout(() => {
+          if (webSocketService.isConnected && !isAiResponding) {
+            console.log(`추천 질문 요청: output_index=${outputIndex}`);
+            webSocketService.send('sonju:suggestedQuestion', 'suggestion.response', {
+              output_index: outputIndex
+            });
+          }
+        }, 2000); // 2초로 증가
+      }
+    }
+  };
+
+  /**
+   * 키워드 기반으로 전화 관련 쿼리인지 판단  
+   */
+  const isCallRelatedQuery = (message) => {
+    const callKeywords = ['전화', '전화번호', '연락처', '번호', '전화해', '전화걸어', '통화', '상담', '문의', '연락'];
+    return callKeywords.some(keyword => message.includes(keyword));
+  };
+
+  /**
+   * 동사무소 정보 처리
+   */
+  const processOfficeInfo = (data, outputIndex) => {
+    console.log('동사무소 정보 처리:', data);
+    
+    setOfficeInfo({
+      tel: data.tel,
+      position: data.pos || data.position
+    });
+
+    const conversation = conversations.get(outputIndex);
+    if (!conversation) return;
+
+    const userMessage = conversation.userMessage;
+    
+    if (isCallRelatedQuery(userMessage)) {
+      setShowCallForIndex(outputIndex);
+    } else {
+      setShowPlaceForIndex(outputIndex);
+    }
+  };
+
+  /**
+   * 대화 목록을 output_index 순서로 정렬해서 반환
+   */
+  const getSortedConversations = () => {
+    return Array.from(conversations.entries())
+      .sort(([indexA], [indexB]) => indexA - indexB)
+      .map(([index, conversation]) => conversation);
+  };
+
+  // ===== 초기화 로직 =====
   useEffect(() => {
-    const onCallIntent = (e) => {
-      const t = (e?.detail || '전화').trim();
-      setShowCall(true); // 🔴 바로 Call UI 열기
-      // 타임라인에도 사용자 발화 추가(선택)
-      setMessages((prev) => [...prev, { type: 'user', content: t, timestamp: new Date() }]);
-      // 서버에 텍스트로도 보내 tel을 받도록 유도(오디오 실패해도 안전)
-      try { webSocketService.sendText(t.includes('전화번호') ? t : '전화번호 알려줘'); } catch {}
-    };
-    window.addEventListener('sonju:call_intent', onCallIntent);
-    return () => window.removeEventListener('sonju:call_intent', onCallIntent);
+    console.log('ChatRoom 컴포넌트 초기화');
+    
+    if (!webSocketService.isConnected) {
+      webSocketService.connect(import.meta.env.VITE_WEBSOCKET_URL);
+    }
   }, []);
 
-  // 🔥 음성 시작/중지 신호를 props로 받아서 처리
+  // ===== 음성 상태 처리 =====
   useEffect(() => {
-    if (voiceStarted) {
-      console.log('[ChatRoom] 음성 인식 시작됨');
+    if (voiceStarted && !isListening) {
+      console.log('[ChatRoom] 음성 인식 시작');
       setIsListening(true);
-      try { webSocketService.resumeAudioContextIfNeeded?.(); } catch {}
+      setCurrentUserTranscript('');
+      
+      try {
+        webSocketService.resumeAudioContextIfNeeded?.();
+      } catch (error) {
+        console.error('오디오 컨텍스트 활성화 실패:', error);
+      }
     }
-  }, [voiceStarted]);
+  }, [voiceStarted, isListening]);
 
   useEffect(() => {
-    if (voiceStopped) {
-      console.log('[ChatRoom] 음성 인식 중지됨');
+    if (voiceStopped && isListening) {
+      console.log('[ChatRoom] 음성 인식 중지');
       setIsListening(false);
     }
-  }, [voiceStopped]);
+  }, [voiceStopped, isListening]);
 
-  // 부모에서 전달된 transcript 처리
+  // ===== 초기 메시지 처리 =====
   useEffect(() => {
-    if (transcriptFromPage && transcriptFromPage.trim()) {
-      console.log('[ChatRoom] 부모에서 전달받은 transcript:', transcriptFromPage);
+    if (hasProcessedInitialMessage) return;
+    
+    let messageToProcess = null;
+    
+    if (initialMessage) {
+      messageToProcess = decodeURIComponent(initialMessage);
+    } else if (location.state?.transcript) {
+      messageToProcess = location.state.transcript;
+    }
+    
+    if (messageToProcess && !isAiResponding) {
+      console.log('초기 메시지 처리:', messageToProcess);
       
-      const conversation = {
-        id: Date.now(),
-        userMessage: transcriptFromPage,
-        aiMessage: '',
-        isComplete: false,
-        timestamp: new Date()
-      };
-
-      setCompletedConversations(prev => [...prev, conversation]);
-      setShowRecommendForIndex(null);
-
-      // preprompt로 전송 -> 왜?????
+      // 🔧 수정: 서버 응답을 기다려서 대화 생성
+      setPendingInitialMessage(messageToProcess);
+      setHasProcessedInitialMessage(true);
+      
       setTimeout(() => {
         if (webSocketService.isConnected) {
-          webSocketService.selectPrePrompt(transcriptFromPage);
-        }
-      }, 100);
-    }
-  }, [transcriptFromPage]);
-
-  // 초기 메시지 처리
-  useEffect(() => {
-    if (initialMessage && !hasInitMessage) {
-      const decodedMessage = decodeURIComponent(initialMessage);
-      console.log('초기 메세지:', decodedMessage);
-
-      const conversation = {
-        id: Date.now(),
-        userMessage: decodedMessage,
-        aiMessage: '',
-        isComplete: false,
-        timestamp: new Date()
-      };
-
-      setCompletedConversations(prev => [...prev, conversation]);
-      setHasInitMessage(true);
-
-      // preprompt로 전송
-      setTimeout(() => {
-        if (webSocketService.isConnected) {
-          webSocketService.selectPrePrompt(decodedMessage);
+          webSocketService.selectPrePrompt(messageToProcess);
         }
       }, 500);
     }
-  }, [initialMessage, hasInitMessage]);
+  }, [initialMessage, location.state, hasProcessedInitialMessage, isAiResponding]);
 
-  // location.state에서 transcript 처리
-  useEffect(() => {
-    if (location.state?.transcript && !hasInitMessage) {
-      const transcript = location.state.transcript;
-      console.log('페이지에서 전달받은 transcript:', transcript);
-
-      const conversation = {
-        id: Date.now(),
-        userMessage: transcript,
-        aiMessage: '',
-        isComplete: false,
-        timestamp: new Date()
-      };
-
-      setCompletedConversations(prev => [...prev, conversation]);
-      setHasInitMessage(true);
-
-      // preprompt로 전송
-      setTimeout(() => {
-        if (webSocketService.isConnected) {
-          webSocketService.selectPrePrompt(transcript);
-        }
-      }, 500);
-    }
-  }, [location.state, hasInitMessage]);
-
-  // WebSocket 핸들러 설정 - 의존성 최소화
+  // ===== WebSocket 핸들러 설정 =====
   useEffect(() => {
     if (!webSocketService.isConnected) {
       webSocketService.connect(import.meta.env.VITE_WEBSOCKET_URL);
     }
-    
-    // 사용자 음성 -> 텍스트 변환 실시간 (delta)
+
+    // === 사용자 음성 → 텍스트 변환 실시간 (delta) ===
     const handleInputAudioTranscriptDelta = (data) => {
       console.log('사용자 음성 전사 delta:', data);
-      if (data.delta) {
+      if (data.delta && data.output_index !== undefined) {
         setCurrentUserTranscript(prev => prev + data.delta);
+        updateUserMessage(data.output_index, currentUserTranscript + data.delta);
       }
     };
 
-    // 사용자 음성 -> 텍스트 변환 완료 (done)
+    // === 사용자 음성 → 텍스트 변환 완료 (done) ===
     const handleInputAudioTranscriptDone = (data) => {
       console.log('사용자 음성 전사 완료:', data);
       
-      setCurrentUserTranscript(currentTranscript => {
-        const finalTranscript = currentTranscript.trim();
+      if (data.output_index !== undefined) {
+        const finalTranscript = currentUserTranscript.trim();
         if (finalTranscript) {
-          const conversation = {
-            id: Date.now(),
-            userMessage: finalTranscript,
-            aiMessage: '',
-            isComplete: false,
-            timestamp: new Date(),
-            outputIndex: data.output_index
-          };
-          
-          setCompletedConversations(prev => [...prev, conversation]);
-          setShowRecommendForIndex(null);
+          completeUserMessage(data.output_index, finalTranscript);
           onRecognitionComplete?.(finalTranscript);
         }
-        
-        setIsListening(false);
-        return '';
-      });
-    };
-
-    // AI 텍스트 응답 실시간 (delta) - 올바른 핸들러
-    const handleTextResponseDelta = (data) => {
-      console.log('AI 텍스트 응답 delta:', data);
-      if (data.delta) {
-        setIsAiResponding(true);
-        setCurrentOutputIndex(data.output_index);
-        //setCurrentAiResponse(prev => prev + data.delta); //12:16 주석처리
-        setCompletedConversations(prev =>
-          prev.map(conv =>
-            conv.outputIndex === data.output_index || (!conv.outputIndex && !conv.aiMessage)
-            ? {
-              ...conv,
-              outputIndex: data.output_index,
-              aiMessage: (conv.aiMessage ||'') + data.delta
-            }
-            : conv
-          )
-        )
       }
-    };
-
-    // AI 텍스트 응답 완료 (done)
-    const handleTextResponseDone = (data) => {
-      console.log('AI 텍스트 응답 완료:', data);
       
-      setCompletedConversations(prev =>
-        prev.map(conv => 
-          conv.outputIndex === data.output_index
-          ? {...conv, isComplete: true }
-          : conv
-        )
-      );
-
-      setShowRecommendForIndex(data.output_index);
-
-      setTimeout(() => {
-        webSocketService.send('sonju:suggestedQuestion','suggestion.response', {output_index: data.output_index})
-      }, 1000);
-
-      if (completedConversations.length >= 3 ) {
-        setShouldShowSummary(true);
-      }
-
-      setCurrentOutputIndex(null);
-      setIsAiResponding(false);
+      setCurrentUserTranscript('');
+      setIsListening(false);
     };
 
-    // AI 음성 데이터 수신 (delta) - base64로 인코딩된 오디오 데이터
-    const handleAudioDelta = async (data) => {
-      console.log('AI 오디오 데이터 수신:', data);
-      try {
-        if (data.delta) {
-          // base64 디코딩 후 오디오 재생
-          const audioData = atob(data.delta);
-          const arrayBuffer = new ArrayBuffer(audioData.length);
-          const uint8Array = new Uint8Array(arrayBuffer);
-          for (let i = 0; i < audioData.length; i++) {
-            uint8Array[i] = audioData.charCodeAt(i);
-          }
-          await webSocketService.playAudioBuffer(arrayBuffer);
+    // === AI 텍스트 응답 실시간 (delta) ===
+    const handleResponseTextDelta = (data) => {
+      console.log('AI 텍스트 응답 delta:', data);
+      if (data.delta && data.output_index !== undefined) {
+        setIsAiResponding(true);
+        
+        // 🔧 수정: pending 메시지가 있다면 대화 생성
+        if (pendingInitialMessage && !conversations.has(data.output_index)) {
+          ensureConversationExists(data.output_index, pendingInitialMessage);
+          setPendingInitialMessage(null);
         }
-      } catch (error) {
-        console.error('AI 오디오 재생 실패:', error);
+        
+        updateAiMessage(data.output_index, data.delta);
       }
     };
 
-    // AI 오디오 재생 완료 (done)
-    const handleAudioDone = (data) => {
-      console.log('AI 오디오 재생 완료:', data);
+    // === AI 음성 동기화 텍스트 (audio_transcript.delta) ===
+    const handleResponseAudioTranscriptDelta = (data) => {
+      console.log('AI 음성 동기화 텍스트 delta:', data);
+      if (data.delta && data.output_index !== undefined) {
+        setIsAiResponding(true);
+        
+        // 🔧 수정: pending 메시지가 있다면 대화 생성
+        if (pendingInitialMessage && !conversations.has(data.output_index)) {
+          ensureConversationExists(data.output_index, pendingInitialMessage);
+          setPendingInitialMessage(null);
+        }
+        
+        updateAiMessage(data.output_index, data.delta);
+      }
     };
 
-    // 제안 질문 수신
-    const handleCallIntent = (transcript) => {
-      setShowCall(true);
-      const ask = transcript || '가까운 동사무소 전화번호 알려줘';
-      setMessages(prev => [...prev, { type: 'user', content: ask, timestamp: new Date() }]);
-      webSocketService.sendText(ask);
+    // === AI 텍스트 응답 완료 (done) ===
+    const handleResponseTextDone = (data) => {
+      console.log('AI 텍스트 응답 완료:', data);
+      if (data.output_index !== undefined) {
+        completeAiResponse(data.output_index, 'text');
+        setIsAiResponding(false);
+      }
     };
 
+    // === AI 음성 응답 완료 (done) ===
+    const handleResponseAudioDone = (data) => {
+      console.log('AI 음성 응답 완료:', data);
+      if (data.output_index !== undefined) {
+        completeAiResponse(data.output_index, 'audio');
+      }
+    };
+
+    // === AI 음성 동기화 텍스트 완료 (audio_transcript.done) ===
+    const handleResponseAudioTranscriptDone = (data) => {
+      console.log('AI 음성 동기화 텍스트 완료:', data);
+      if (data.output_index !== undefined) {
+        completeAiResponse(data.output_index, 'audio_transcript');
+        setIsAiResponding(false);
+      }
+    };
+
+    // === 추천 질문 수신 ===
     const handleSuggestedQuestions = (data) => {
       console.log('제안 질문들:', data);
       if (data.questions && Array.isArray(data.questions)) {
@@ -269,76 +365,83 @@ export default function ChatRoom({ voiceStarted, voiceStopped, onRecognitionComp
       }
     };
 
-    // 동사무소 정보 수신
+    // === 동사무소 정보 수신 ===
     const handleOfficeInfo = (data) => {
-      console.log('동사무소 정보:', data);
-      setOfficeInfo({
-        tel: data.tel,
-        position: data.pos
-      });
+      console.log('동사무소 정보 수신:', data);
       
-      // 현재 대화에 대해 Place 표시
-      setCompletedConversations(prevConvs => {
-        if (prevConvs.length > 0) {
-          const lastConv = prevConvs[prevConvs.length - 1];
-          setShowPlaceForIndex(lastConv.outputIndex || lastConv.id);
+      if (data.output_index !== undefined) {
+        processOfficeInfo(data, data.output_index);
+      } else {
+        const sortedConversations = getSortedConversations();
+        if (sortedConversations.length > 0) {
+          const lastConversation = sortedConversations[sortedConversations.length - 1];
+          processOfficeInfo(data, lastConversation.outputIndex);
         }
-        return prevConvs;
-      });
+      }
     };
 
-    // 에러 처리
+    // === 에러 처리 ===
     const handleError = (data) => {
       console.error('서버 에러:', data);
-      alert(`오류가 발생했습니다: ${data.message || data.error}`);
       setIsAiResponding(false);
+      setIsListening(false);
     };
 
-    // 핸들러 등록 - 올바른 이벤트 타입 사용
+    // === 전화 의도 감지 (전역 이벤트) ===
+    const handleCallIntent = (e) => {
+      const transcript = e?.detail || '전화번호 알려줘';
+      console.log('전화 의도 감지:', transcript);
+      
+      setPendingInitialMessage(transcript);
+      
+      setTimeout(() => {
+        if (webSocketService.isConnected) {
+          webSocketService.sendText(transcript);
+        }
+      }, 100);
+    };
+
+    // 핸들러 등록
     webSocketService.on('openai:conversation', 'input_audio_transcript.delta', handleInputAudioTranscriptDelta);
     webSocketService.on('openai:conversation', 'input_audio_transcript.done', handleInputAudioTranscriptDone);
-    webSocketService.on('openai:conversation', 'response.text.delta', handleTextResponseDelta); // 텍스트 응답
-    webSocketService.on('openai:conversation', 'response.text.done', handleTextResponseDone);
-    webSocketService.on('openai:conversation', 'response.audio.delta', handleAudioDelta); // 텍스트 응답
-    webSocketService.on('openai:conversation', 'response.audio.done', handleAudioDone);
-    webSocketService.on('openai:conversation','response.audio_transcript.delta',handleTextResponseDelta);
+    webSocketService.on('openai:conversation', 'response.text.delta', handleResponseTextDelta);
+    webSocketService.on('openai:conversation', 'response.text.done', handleResponseTextDone);
+    webSocketService.on('openai:conversation', 'response.audio.done', handleResponseAudioDone);
+    webSocketService.on('openai:conversation', 'response.audio_transcript.delta', handleResponseAudioTranscriptDelta);
+    webSocketService.on('openai:conversation', 'response.audio_transcript.done', handleResponseAudioTranscriptDone);
     webSocketService.on('sonju:suggestedQuestion', 'suggestion.response', handleSuggestedQuestions);
     webSocketService.on('sonju:officeInfo', 'officeInfo', handleOfficeInfo);
     webSocketService.on('openai:error', handleError);
+    
+    window.addEventListener('sonju:call_intent', handleCallIntent);
 
     return () => {
-      // 핸들러 제거
       webSocketService.off('openai:conversation', 'input_audio_transcript.delta', handleInputAudioTranscriptDelta);
       webSocketService.off('openai:conversation', 'input_audio_transcript.done', handleInputAudioTranscriptDone);
-      webSocketService.off('openai:conversation', 'response.text.delta', handleTextResponseDelta);
-      webSocketService.off('openai:conversation', 'response.text.done', handleTextResponseDone);
-      webSocketService.off('openai:conversation', 'response.audio.delta', handleAudioDelta); // 텍스트 응답
-      webSocketService.off('openai:conversation', 'response.audio.done', handleAudioDone);
-      webSocketService.off('openai:conversation','response.audio_transcript.delta', handleTextResponseDelta);
+      webSocketService.off('openai:conversation', 'response.text.delta', handleResponseTextDelta);
+      webSocketService.off('openai:conversation', 'response.text.done', handleResponseTextDone);
+      webSocketService.off('openai:conversation', 'response.audio.done', handleResponseAudioDone);
+      webSocketService.off('openai:conversation', 'response.audio_transcript.delta', handleResponseAudioTranscriptDelta);
+      webSocketService.off('openai:conversation', 'response.audio_transcript.done', handleResponseAudioTranscriptDone);
       webSocketService.off('sonju:suggestedQuestion', 'suggestion.response', handleSuggestedQuestions);
       webSocketService.off('sonju:officeInfo', 'officeInfo', handleOfficeInfo);
       webSocketService.off('openai:error', handleError);
+      
+      window.removeEventListener('sonju:call_intent', handleCallIntent);
     };
-  }, []); // 빈 의존성 배열
+  }, []); // 🔧 수정: conversations 의존성 제거
 
   // 추천 질문 클릭 처리
   const handleQuestionClick = (question) => {
-    const conversation = {
-      id: Date.now(),
-      userMessage: question,
-      aiMessage: '',
-      isComplete: false,
-      timestamp: new Date()
-    };
-    
-    setCompletedConversations(prev => [...prev, conversation]);
-    setShowRecommendForIndex(null);
+    if (isAiResponding) return;
+
+    setPendingInitialMessage(question);
+    setShowSuggestionsForIndex(null);
     setSuggestedQuestions([]);
 
-    // 서버에 전송
     setTimeout(() => {
       if (webSocketService.isConnected) {
-        webSocketService.selectPrePrompt(question);
+        webSocketService.sendText(question);
       }
     }, 100);
   };
@@ -354,63 +457,52 @@ export default function ChatRoom({ voiceStarted, voiceStopped, onRecognitionComp
       </div>
       
       <div className="flex-1 overflow-y-auto pb-[90px] w-full">
-        {/* 완료된 대화들 표시 */}
-        {completedConversations.map((conversation) => (
+        {getSortedConversations().map((conversation) => (
           <div key={`conversation-${conversation.id}`} className="conversation-block">
-            {/* 사용자 메시지 */}
-            <UserBubble text={conversation.userMessage} />
+            <UserBubble 
+              text={conversation.userMessage} 
+              isTemp={!conversation.userMessageComplete}
+            />
             
-            {/* AI 메시지 - 완성된 응답만 표시 */}
             {conversation.aiMessage && (
               <SonjuBubble 
                 text={conversation.aiMessage} 
                 outputIndex={conversation.outputIndex}
-                isTyping={false}
+                isTyping={!conversation.aiTextComplete}
               />
-            )}{
-              /* 현재 진행 중인 사용자 음성 전사 */}
-              {/* {currentUserTranscript && (
-                <div className="conversation-block">
-                  <UserBubble text={currentUserTranscript} />
-                </div>
-              )}
-               */}
-              
+            )}
             
-            {/* 해당 대화에 대한 제안 질문들 */}
-            {showRecommendForIndex === (conversation.outputIndex || conversation.id) && 
-             suggestedQuestions.length > 0 && (
-              <div className="mt-[20px]">
-                <div className="font-bold text-[#000000] text-[22px] mb-4 px-6">
+            {showSuggestionsForIndex === conversation.outputIndex && suggestedQuestions.length > 0 && (
+              <div className="mt-[20px] px-6">
+                <div className="font-bold text-[#000000] text-[22px] mb-4">
                   다음 대화는 어떠세요?
                 </div>
-                <div className="flex flex-wrap gap-[16px] px-6">
+                <div className="flex gap-2 justify-between items-center">
                   {suggestedQuestions.map((question, index) => (
-                    <Recommend 
-                      key={`question-${conversation.id}-${index}`}
-                      text={question}
-                      type="question"
+                    <button
+                      key={`question-${conversation.outputIndex}-${index}`}
                       onClick={() => handleQuestionClick(question)}
-                    />
+                      className="p-3 text-left font-bold text-[22px] text-gray500 bg-gray200 rounded-[10px] cursor-pointer hover:bg-gray300 w-[176px]"
+                    >
+                      {question}
+                    </button>
                   ))}
                 </div>
               </div>
             )}
             
-            {/* 동사무소 위치 정보 */}
-            {showPlaceForIndex === (conversation.outputIndex || conversation.id) && officeInfo && (
+            {showPlaceForIndex === conversation.outputIndex && officeInfo && (
               <Place 
-                key={`place-${conversation.id}`}
+                key={`place-${conversation.outputIndex}`}
                 communityCenter="가까운 동사무소" 
                 phoneNumber={officeInfo.tel}
                 position={officeInfo.position}
               />
             )}
             
-            {/* 전화번호 정보 */}
-            {showCallForIndex === (conversation.outputIndex || conversation.id) && officeInfo && (
+            {showCallForIndex === conversation.outputIndex && officeInfo && (
               <Call 
-                key={`call-${conversation.id}`}
+                key={`call-${conversation.outputIndex}`}
                 communityCenter="가까운 동사무소" 
                 number={officeInfo.tel} 
               />
@@ -418,50 +510,11 @@ export default function ChatRoom({ voiceStarted, voiceStopped, onRecognitionComp
           </div>
         ))}
         
-        {isAiResponding && (
-          <SonjuBubble text={currentAiResponse} isTyping={true} />
+        {getSortedConversations().filter(conv => conv.aiTextComplete && !conv.hasError).length >= 3 && (
+          <ChatSummary />
         )}
-
-        {officeInfo?.pos && !showCall && (
-          <Place communityCenter="가까운 동사무소" position={officeInfo.pos} />
-        )}
-
-        {showCall && (
-          officeInfo?.tel
-            ? <Call communityCenter="가까운 동사무소" number={officeInfo.tel} />
-            : <SonjuBubble text="전화번호를 조회하고 있어요…" />
-        )}
-
-        {suggestedQuestions.length > 0 && (
-          <div className="mt-[40px] px-6">
-            <div className="font-bold text-[#000000] text-[22px] mb-4">
-              다음 대화는 어떠세요?
-            </div>
-            <div className="flex gap-2 justify-center items-center">
-              {suggestedQuestions.map((question, index) => (
-                <button
-                  key={index}
-                  onClick={() => handleQuestionClick(question)}
-                  className="p-3 text-left font-bold text-[22px] text-gray500 bg-gray200 rounded-[10px] cursor-pointer hover:bg-gray300 w-[176px]"
-                >
-                  {question}
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
-        
-        <ChatSummary />
       </div>
-
-      {/* 사용자 음성 실시간 전사 표시 */}
-      {/* {isListening && currentUserTranscript && (
-        <div className="px-6 py-2 bg-gray200 text-gray600 text-sm">
-          음성 인식 중: {currentUserTranscript}
-        </div>
-      )} */}
       
-      {/* 음성 인식 중 표시 */}
       {isListening && (
         <div className="absolute bottom-0 w-full flex justify-center z-40">
           <SonjuListening />

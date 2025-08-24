@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import SunImg from "../../assets/images/sun.svg";
 import SonjuAnswer from "./SonjuAnswer";
 
-export default function SonjuBubble({ text, isTyping = false, outputIndex }) {
+export default function SonjuBubble({ text, outputIndex, isTyping = false }) {
   const [isLoading, setIsLoading] = useState(false); //답변 생성 상태
   const [answer, setAnswer] = useState(""); //AI 답변 저장
   const [isTypingComplete, setIsTypingComplete] = useState(false);
@@ -12,16 +12,12 @@ export default function SonjuBubble({ text, isTyping = false, outputIndex }) {
     if (text) {
       setAnswer(text);
       setIsLoading(false);
-
-      if (!isTyping) {
-        setIsTypingComplete(true);
-      }
     }
     else {
     setIsLoading(true);
-    setIsTypingComplete(true);
+    setAnswer("");
     }
-  }, [text, isTyping]);
+  }, [text]);
 
   const handleTypingComplete = () => {
     setIsTypingComplete(true);
@@ -38,7 +34,7 @@ export default function SonjuBubble({ text, isTyping = false, outputIndex }) {
         </div>
       </div>
       
-      {!isLoading && <SonjuAnswer text={answer} onTypingComplete={handleTypingComplete} isTyping={isTyping}/>}
+      {!isLoading && answer && <SonjuAnswer text={answer} onTypingComplete={handleTypingComplete} isTyping={isTyping}/>}
     </div>
   );
 }

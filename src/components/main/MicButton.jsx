@@ -124,7 +124,13 @@ export default function MicButton({ onListeningStart, onListeningStop, onTranscr
       audioSystemRef.current = audioSystem;
 
       // 브라우저 스피치 인식 시작 (즉시 텍스트 얻기)
-      try { recognitionRef.current?.start(); } catch {}
+      try { 
+        if (recognitionRef.current && !recogActiveRef.current) {
+          recognitionRef.current.start();
+        }
+      } catch (e) {
+        console.warn("스피치 인식 시작 실패: ", e);
+      }
 
     } catch (e) {
       console.error("녹음 시작 실패:", e);
@@ -137,7 +143,7 @@ export default function MicButton({ onListeningStart, onListeningStop, onTranscr
     if (stoppingRef.current) return;
     stoppingRef.current = true;
 
-    while (!hasAudioRef.current < 1) {
+    while (!hasAudioRef.current < 20) {
       await new Promise( r => setTimeout (r, 50));
     }
     setIsRecording(false);

@@ -12,7 +12,7 @@ export default function BottomNav({
   onTranscriptUpdate,
   onRecognitionError,
 //  onRecognitionComplete, //음성 인식 완료 추가
-//  isInChatRoom = false, //채팅창 여부 추가
+  isInChatRoom = false, //채팅창 여부 추가
   currentStep,
   onCallIntent
 }) {
@@ -26,6 +26,14 @@ export default function BottomNav({
   const handleUserInfoClick = () => {
     setIsModalOpen(true);
   };//내 정보 버튼 클릭 시 모달 열기
+
+  const handleCallIntentSafely = (transcript) => {
+    try {
+      onCallIntent?.(transcript);
+    } catch (error) {
+      console.error('전화 의도 처리 실패:', error);
+    }
+  };
 
   // const handleChatRoomVoiceStart = () => {
   //   webSocketService.startSpeaking();
@@ -55,7 +63,7 @@ export default function BottomNav({
           onTranscriptUpdate={onTranscriptUpdate}
           onRecognitionError={onRecognitionError}
           currentStep={currentStep}
-          onCallIntent={onCallIntent}
+          onCallIntent={handleCallIntentSafely}
         />
 
         <div onClick={handleUserInfoClick} className="flex flex-col items-center gap-[6px] pr-[47.25px] pt-[46px]">

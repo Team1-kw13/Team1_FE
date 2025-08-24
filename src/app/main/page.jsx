@@ -142,7 +142,13 @@ export default function Page() {
 
    // 3000ms 후 채팅 페이지로 이동
    setTimeout(() => {
-     navigate(`/chatroompage/${encodeURIComponent(finalText)}`);
+     navigate('/chatroompage', {
+        state: { 
+          transcript: finalText,
+          timestamp: Date.now()
+        },
+        replace: true
+      });
     }, 3000);
    };
 
@@ -162,6 +168,21 @@ export default function Page() {
         setCurrentStep('intro'); // 에러 시 초기 상태로 복귀
       }, 2000);
     }, 1000);
+  };
+
+  //전화 의도 처리
+  const handleCallIntent = (transcript) => {
+    console.log('메인 페이지: 전화 의도 감지:', transcript);
+    
+    // 즉시 채팅 페이지로 이동하면서 전화 의도 전달
+    navigate('/chatroompage', {
+      state: { 
+        transcript: transcript,
+        isCallIntent: true, // 전화 의도 플래그
+        timestamp: Date.now()
+      },
+      replace: true
+    });
   };
 
   //상태에 따라 메인 콘텐츠 렌더링 (컴포넌트 전환)
@@ -206,6 +227,7 @@ export default function Page() {
         onListeningStop={handleListeningStop}
         onTranscriptUpdate={handleTranscriptUpdate}
         onRecognitionError={handleRecognitionError}
+        onCallIntent={handleCallIntent}
         currentStep={currentStep}
       />
     </div>
