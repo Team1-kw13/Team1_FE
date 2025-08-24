@@ -3,7 +3,7 @@ import SunImg from "../../assets/images/sun.svg";
 import SonjuAnswer from "./SonjuAnswer";
 
 export default function SonjuBubble({ text }) {
-  const [isLoading, setIsLoading] = useState(true); //답변 생성 상태
+  const [isLoading, setIsLoading] = useState(false); //답변 생성 상태
   const [answer, setAnswer] = useState(""); //AI 답변 저장
 
   useEffect (()=> {
@@ -16,7 +16,7 @@ export default function SonjuBubble({ text }) {
     //예시로 2초 후에 답변을 설정
     setTimeout(() => {
       setAnswer("어쩌고 저쩌고 절차를 소개할게요. 어쩌고 저쩌고 어쩌고 저쩌고 입니다. 어쩌고 하는데 어쩌고 하는데. 어쩌고 구청 키오스크 이용하면 됨. 준비물은 뭐만 필요함 ㅇ러ㅣ나허ㅣ아ㅓ힌 ㅏㅓ히ㅏ어히나ㅓㅣ허니하ㅓㅣㅇ허니허ㅣ어ㅣ러이허ㅣ나히ㅣㄴ허ㅣ너ㅣ허니아힌허");
-      setIsLoading(false);
+      setIsLoading(true);
     }, 2000);
     }
   }, [text]);
@@ -31,7 +31,8 @@ export default function SonjuBubble({ text }) {
           {isLoading ? "잠시만 기다려 주세요!" : "손주가 알려드릴게요!"}
         </div>
       </div>
-    {!isLoading && <SonjuAnswer text={answer} />}
+      
+      {!isLoading && <SonjuAnswer text={answer} />}
     </div>
   );
 }

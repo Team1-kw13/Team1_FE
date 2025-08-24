@@ -6,6 +6,10 @@ let messageHandlers = {};
 let connectionAttempts = 0;
 let sessionReady=false;
 let readyWaiters=[];
+let userTranscripts = {}; //사용자 발화 누적 저장
+let aiTranscripts= {}; //ai 응답 누적 저장
+let onUserTranscriptUpdate = null; //UI로 넘길 사용자 콜백
+let onAiTranscriptUpdate = null;
 let audioContext = null;
 let audioQueue = [];
 let isPlayingAudio = false;
@@ -33,27 +37,31 @@ async function resumeAudioContextIfNeeded() {
 
 // WebSocket 연결
 function connect(url = import.meta.env.VITE_WEBSOCKET_URL) {
-  // 이미 연결되어 있으면 기존 연결 사용
-  if (isConnected) {
-    console.log('✅ 이미 WebSocket이 연결되어 있습니다');
-    return Promise.resolve();
-  }
+  // // 이미 연결되어 있으면 기존 연결 사용
+  // if (isConnected) {
+  //   console.log('✅ 이미 WebSocket이 연결되어 있습니다');
+  //   return Promise.resolve();
+  // }
 
-  // 연결 시도 중이면 대기
-  if (isConnecting) {
-    console.log('⏳ WebSocket 연결 시도 중입니다');
-    return new Promise((resolve) => {
-      const checkConnection = () => {
-        if (isConnected) {
-          resolve();
-        } else if (!isConnecting) {
-          resolve(); // 연결 실패해도 resolve
-        } else {
-          setTimeout(checkConnection, 100);
-        }
-      };
-      checkConnection();
-    });
+  // // 연결 시도 중이면 대기
+  // if (isConnecting) {
+  //   console.log('⏳ WebSocket 연결 시도 중입니다');
+  //   return new Promise((resolve) => {
+  //     const checkConnection = () => {
+  //       if (isConnected) {
+  //         resolve();
+  //       } else if (!isConnecting) {
+  //         resolve(); // 연결 실패해도 resolve
+  //       } else {
+  //         setTimeout(checkConnection, 100);
+  //       }
+  //     };
+  //     checkConnection();
+  //   });
+  // }
+  if (isConnected || isConnecting) {
+    console.log("이미 연결 중이거나 연결되었습니다");
+    return Promise.resolve();
   }
 
   isConnecting = true; // 연결 시도 중 또는 연결 완료 상태 X -> 연결 시도
@@ -64,12 +72,15 @@ function connect(url = import.meta.env.VITE_WEBSOCKET_URL) {
       ws = new WebSocket(url); // 소켓 연결
       ws.binaryType = 'arraybuffer';
       
+      //ws.binaryType = "arraybuffer"; //오디오 바이너리 전송 대비
+
       ws.onopen = function() { // 소켓이 열림 = 연결 성공
         console.log('✅ WebSocket 연결 성공');
         isConnected = true;
         isConnecting = false;
         connectionAttempts = 0; // 연결 성공 -> 연결 시도 횟수 초기화
-        
+        userTranscripts = {};
+        aiTranscripts = {};
         {/*
         // 임시 해결: 서버가 READY 신호를 안 줄 때 클라에서 바로 세션 ready 처리
         sessionReady = true;
@@ -351,6 +362,7 @@ function send(channel, type, payload = {}) {
 // === 대화 관련 함수들 ===
 function startSpeaking() {
   console.log('🎤 음성 발화 시작');
+  //return send(CHANNEL,'input_audio_buffer.commit');
   return true;
 }
 
@@ -385,7 +397,7 @@ function sendText(text) {
 }
 
 function selectPrePrompt(option) {
-  return send('openai:conversation', 'preprompted', {enum: option});
+  return send(CHANNEL, 'preprompted', {enum: option});
 }
 
 
@@ -483,7 +495,7 @@ const webSocketService = {
   
   // 대화 관련
   startSpeaking: startSpeaking,
-  sendAudioPCM16,
+  sendAudioPCM16: sendAudioPCM16,
   stopSpeaking: stopSpeaking,
   selectPrePrompt: selectPrePrompt,
   sendText:sendText,

@@ -109,7 +109,6 @@ export default function MicButton({ onListeningStart, onListeningStop, onTranscr
       if (!webSocketService.isConnected) {
         await webSocketService.connect(import.meta.env.VITE_WEBSOCKET_URL);
       }
-
       setIsRecording(true);
       onListeningStart?.();
 
