@@ -9,6 +9,7 @@ import SonjuListening from "./SonjuListening";
 import UserBubble from "./UserBubble";
 import webSocketService from "../../service/websocketService";
 
+
 export default function ChatRoom({ voiceStarted, voiceStopped, onRecognitionComplete }) {
   const [messages, setMessages] = useState([]);
   const [isAiResponding, setIsAiResponding] = useState(false);
@@ -16,15 +17,31 @@ export default function ChatRoom({ voiceStarted, voiceStopped, onRecognitionComp
   const [currentOutputIndex, setCurrentOutputIndex] = useState(null);
   const [suggestedQuestions, setSuggestedQuestions] = useState([]);
   const [officeInfo, setOfficeInfo] = useState(null);
+  const [showCall, setShowCall] = useState(false);
   const {initialMessage} = useParams();
   const [isListening, setIsListening] = useState(false);
   const [hasInitMessage, setHasInitMessage] = useState(false);
+
+  // 전역 “전화 의도” 이벤트 수신
+  useEffect(() => {
+    const onCallIntent = (e) => {
+      const t = (e?.detail || '전화').trim();
+      setShowCall(true); // 🔴 바로 Call UI 열기
+      // 타임라인에도 사용자 발화 추가(선택)
+      setMessages((prev) => [...prev, { type: 'user', content: t, timestamp: new Date() }]);
+      // 서버에 텍스트로도 보내 tel을 받도록 유도(오디오 실패해도 안전)
+      try { webSocketService.sendText(t.includes('전화번호') ? t : '전화번호 알려줘'); } catch {}
+    };
+    window.addEventListener('sonju:call_intent', onCallIntent);
+    return () => window.removeEventListener('sonju:call_intent', onCallIntent);
+  }, []);
 
   // 🔥 음성 시작/중지 신호를 props로 받아서 처리
   useEffect(() => {
     if (voiceStarted) {
       console.log('[ChatRoom] 음성 인식 시작됨');
       setIsListening(true);
+      try { webSocketService.resumeAudioContextIfNeeded?.(); } catch {}
     }
   }, [voiceStarted]);
 
@@ -121,6 +138,12 @@ export default function ChatRoom({ voiceStarted, voiceStopped, onRecognitionComp
       setCurrentOutputIndex(null);
     };
 
+    const handleCallIntent = (transcript) => {
+      setShowCall(true);
+      const ask = transcript || '가까운 동사무소 전화번호 알려줘';
+      setMessages(prev => [...prev, { type: 'user', content: ask, timestamp: new Date() }]);
+      webSocketService.sendText(ask);
+    };
 
     const handleSuggestedQuestions = (data) => {
       console.log('제안 질문들:', data);
@@ -131,10 +154,7 @@ export default function ChatRoom({ voiceStarted, voiceStopped, onRecognitionComp
 
     const handleOfficeInfo = (data) => {
       console.log('동사무소 정보:', data);
-      setOfficeInfo({
-        tel: data.tel,
-        position: data.pos
-      });
+      setOfficeInfo({ tel: data.tel, pos: data.pos });
     };
 
     const handleError = (data) => {
@@ -145,8 +165,8 @@ export default function ChatRoom({ voiceStarted, voiceStopped, onRecognitionComp
     // 핸들러 등록
     //webSocketService.on('openai:conversation','input_audio_transcript.delta', handleUserVoiceTranscript);
     webSocketService.on('openai:conversation', 'input_audio_transcript.done', handleUserVoiceComplete);
-    webSocketService.on('openai:conversation', 'response.text.delta', handleTextResponse);
-    webSocketService.on('openai:conversation', 'response.text.done', handleTextDone);
+    webSocketService.on('openai:conversation', 'response.audio_transcript.delta', handleTextResponse);
+    webSocketService.on('openai:conversation', 'response.done', handleTextDone);
     webSocketService.on('sonju:suggestedQuestion', 'suggestion.response', handleSuggestedQuestions);
     webSocketService.on('sonju:officeInfo', 'officeInfo', handleOfficeInfo);
     webSocketService.on('openai:error', handleError);
@@ -154,8 +174,8 @@ export default function ChatRoom({ voiceStarted, voiceStopped, onRecognitionComp
     return () => {
     //  webSocketService.off('openai:conversation','input_audio_transcript.delta', handleUserVoiceTranscript);
       webSocketService.off('openai:conversation', 'input_audio_transcript.done', handleUserVoiceComplete);
-      webSocketService.off('openai:conversation', 'response.text.delta', handleTextResponse);
-      webSocketService.off('openai:conversation', 'response.text.done', handleTextDone);
+      webSocketService.off('openai:conversation', 'response.audio_transcript.delta', handleTextResponse);
+      webSocketService.off('openai:conversation', 'response.done', handleTextDone);
       webSocketService.off('sonju:suggestedQuestion', 'suggestion.response', handleSuggestedQuestions);
       webSocketService.off('sonju:officeInfo', 'officeInfo', handleOfficeInfo);
       webSocketService.off('openai:error', handleError);
@@ -194,18 +214,28 @@ export default function ChatRoom({ voiceStarted, voiceStopped, onRecognitionComp
         {isAiResponding && currentAiResponse && (
           <SonjuBubble text={currentAiResponse} isTyping={true} />
         )}
-        
+
+        {officeInfo?.pos && !showCall && (
+          <Place communityCenter="가까운 동사무소" position={officeInfo.pos} />
+        )}
+
+        {showCall && (
+          officeInfo?.tel
+            ? <Call communityCenter="가까운 동사무소" number={officeInfo.tel} />
+            : <SonjuBubble text="전화번호를 조회하고 있어요…" />
+        )}
+
         {suggestedQuestions.length > 0 && (
           <div className="mt-[40px] px-6">
             <div className="font-bold text-[#000000] text-[22px] mb-4">
               다음 대화는 어떠세요?
             </div>
-            <div className="flex flex-col gap-2">
+            <div className="flex gap-2 justify-center items-center">
               {suggestedQuestions.map((question, index) => (
                 <button
                   key={index}
                   onClick={() => handleQuestionClick(question)}
-                  className="p-3 text-left font-bold text-[22px] text-gray500 bg-gray200 rounded-[10px] cursor-pointer hover:bg-gray300"
+                  className="p-3 text-left font-bold text-[22px] text-gray500 bg-gray200 rounded-[10px] cursor-pointer hover:bg-gray300 w-[176px]"
                 >
                   {question}
                 </button>
@@ -214,19 +244,6 @@ export default function ChatRoom({ voiceStarted, voiceStopped, onRecognitionComp
           </div>
         )}
         
-        {officeInfo && (
-          <Place 
-            communityCenter="가까운 동사무소" 
-            phoneNumber={officeInfo.tel}
-            position={officeInfo.position}
-          />
-        )}
-        
-        <Recommend text="등본 발급 시 준비물은 뭐야?" />
-        <Recommend text="영업 시간 알려줘" />
-        <Recommend text="전화번호 알려줘" />
-        <Place communityCenter="중계1동 주민센터" />
-        <Call communityCenter="중계1동 주민센터" number="02-131-2340" />
         <ChatSummary />
       </div>
       

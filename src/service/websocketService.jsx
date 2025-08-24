@@ -10,8 +10,30 @@ let userTranscripts = {}; //사용자 발화 누적 저장
 let aiTranscripts= {}; //ai 응답 누적 저장
 let onUserTranscriptUpdate = null; //UI로 넘길 사용자 콜백
 let onAiTranscriptUpdate = null;
+let audioContext = null;
+let audioQueue = [];
+let isPlayingAudio = false;
 const maxConnectionAttempts = 3;
 const CHANNEL='openai:conversation';
+
+function ensureAudio() {
+  if (!audioContext) {
+    // 24kHz로 내려오면 sampleRate를 맞춰주는 게 베스트(모르면 기본값도 OK)
+    try {
+      audioContext = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 24000 });
+    } catch {
+      audioContext = new (window.AudioContext || window.webkitAudioContext)();
+    }
+  }
+}
+
+// 사용자 제스처 직후(버튼 클릭/마이크 시작 등) 반드시 호출
+async function resumeAudioContextIfNeeded() {
+  ensureAudio();
+  if (audioContext && audioContext.state === 'suspended') {
+    try { await audioContext.resume(); } catch {}
+  }
+}
 
 // WebSocket 연결
 function connect(url = import.meta.env.VITE_WEBSOCKET_URL) {
@@ -48,6 +70,7 @@ function connect(url = import.meta.env.VITE_WEBSOCKET_URL) {
   return new Promise((resolve, reject) => {
     try {
       ws = new WebSocket(url); // 소켓 연결
+      ws.binaryType = 'arraybuffer';
       
       //ws.binaryType = "arraybuffer"; //오디오 바이너리 전송 대비
 
@@ -73,9 +96,11 @@ function connect(url = import.meta.env.VITE_WEBSOCKET_URL) {
             const message = JSON.parse(event.data);
             console.log ("서버에서 받은 string type 메세지: ", message);
             handleMessage(message);
-        } else if (typeof event.data instanceof Blob) {
+        } else if (event.data instanceof ArrayBuffer) {
+          handleMessageBinary(event.data);
+        } else if (event.data instanceof Blob) {
             console.log ("서버에서 받은 오디오(Blob) 메세지: ", event.data);
-            handleMessage({ type: '', data: event.data});
+            handleMessageBlob({ type: '', data: event.data});
         } else {
             console.log ("서버에서 JSON, Blob 이외의 type 메세지 수신: ", event.data);
         }
@@ -155,6 +180,102 @@ function handleMessage(data) {
   });
 
   
+}
+
+// 오디오 Blob 처리
+async function handleAudioBlob(blob) {
+  try {
+    console.log('오디오 Blob 처리 시작:', { size: blob.size, type: blob.type });
+    
+    // 최소 크기 체크
+    // if (blob.size < 100) {
+    //   console.warn('오디오 Blob 크기가 너무 작음:', blob.size);
+    //   return;
+    // }
+    
+    const arrayBuffer = await blob.arrayBuffer();
+    
+    // PCM 데이터로 직접 처리
+    await playPCMAudio(arrayBuffer);
+    
+  } catch (error) {
+    console.error('오디오 Blob 처리 실패:', error);
+  }
+}
+
+ async function handleMessageBlob(blob) {
+   try {
+     const arrayBuffer = await blob.arrayBuffer();
+     await handleMessageBinary(arrayBuffer);
+   } catch (e) {
+     console.error('Blob 처리 실패:', e);
+   }
+ }
+
+ async function handleMessageBinary(arrayBuffer) {
+   const bytes = new Uint8Array(arrayBuffer);
+   const isRIFF = bytes[0] === 0x52 && bytes[1] === 0x49 && bytes[2] === 0x46 && bytes[3] === 0x46; // 'RIFF'
+   const isOgg  = bytes[0] === 0x4F && bytes[1] === 0x67 && bytes[2] === 0x67 && bytes[3] === 0x53; // 'OggS'
+   const isID3  = bytes[0] === 0x49 && bytes[1] === 0x44 && bytes[2] === 0x33;                       // 'ID3'
+
+   await resumeAudioContextIfNeeded();
+   if (!audioContext) return;
+
+   try {
+     if (isRIFF || isOgg || isID3) {
+       await playAudioBuffer(arrayBuffer);
+       return;
+     }
+     await playAudioBuffer(arrayBuffer); // 브라우저가 코덱 추론 가능 시
+   } catch (e) {
+     console.warn('decodeAudioData 실패 → PCM 폴백 시도:', e);
+     await playPCMAudio(arrayBuffer); // 24kHz mono PCM16 가정
+   }
+ }
+
+
+// PCM 오디오 직접 재생
+async function playPCMAudio(arrayBuffer) {
+  if (!audioContext) return;
+  try {
+    const pcm = new Int16Array(arrayBuffer);
+    const f32 = new Float32Array(pcm.length);
+    for (let i = 0; i < pcm.length; i++) f32[i] = Math.max(-1, Math.min(1, pcm[i] / 32768));
+    const sampleRate = 24000;
+    const buf = audioContext.createBuffer(1, f32.length, sampleRate);
+    buf.getChannelData(0).set(f32);
+    audioQueue.push(buf);
+    if (!isPlayingAudio) playNextAudio();
+  } catch (error) {
+    console.error('PCM 오디오 재생 실패:', error);
+  }
+}
+
+// 오디오 재생
+async function playAudioBuffer(arrayBuffer) {
+  if (!audioContext) return;
+  try {
+    const audioBuffer = await audioContext.decodeAudioData(arrayBuffer.slice(0));
+    audioQueue.push(audioBuffer);
+    if (!isPlayingAudio) playNextAudio();
+  } catch (error) {
+    console.error('오디오 디코딩 실패:', error);
+    throw error;
+  }
+  
+}
+
+async function playNextAudio() {
+  if (audioQueue.length === 0) { isPlayingAudio = false; return; }
+  isPlayingAudio = true;
+  const source = audioContext.createBufferSource();
+  source.buffer = audioQueue.shift();
+  source.connect(audioContext.destination);
+  source.onended = () => playNextAudio();
+  try { source.start(); } catch (e) {
+    console.error('오디오 시작 실패:', e);
+    isPlayingAudio = false;
+  }
 }
 
 // 핸들러 등록 (중복 방지)
@@ -247,24 +368,30 @@ function startSpeaking() {
 
 // 사용자 음성 발화
 // PCM16 ArrayBuffer(또는 Int16Array.buffer)를 그대로 보냄?
-function sendAudioBuffer(base64Pcm16) {
+function sendAudioPCM16(arrayBuffer) {
   if (!ws || ws.readyState !== WebSocket.OPEN) return false;
-  try { 
-    return send(CHANNEL,'input_audio_buffer.append', {audio_buffer: base64Pcm16})
-  } catch (e) { 
-    console.error("사용자 음성 발화 전송 실패: ", e); 
-    return false; 
+  try {
+    const uint8 = new Uint8Array(arrayBuffer);
+    let s = '';
+    for (let i = 0; i < uint8.length; i++) s += String.fromCharCode(uint8[i]);
+    const base64 = btoa(s);
+    
+    return send(CHANNEL, 'input_audio_buffer.append', {
+      audio_buffer: base64
+    });
+  } catch (error) {
+    console.error("오디오 전송 실패:", error);
+    return false;
   }
 }
 
 function stopSpeaking(hasAudio=true) {
   console.log('🛑 음성 발화 종료');
-  //return send(CHANNEL, 'input_audio_buffer.end');
   if(hasAudio) send(CHANNEL,'input_audio_buffer.commit');
   return send(CHANNEL,'input_audio_buffer.end');
 }
 
-function sendPrePrompt(option) {
+function selectPrePrompt(option) {
   return send(CHANNEL, 'preprompted', {enum: option});
 }
 
@@ -365,7 +492,10 @@ const webSocketService = {
   startSpeaking: startSpeaking,
   sendAudioBuffer: sendAudioBuffer,
   stopSpeaking: stopSpeaking,
-  sendPrePrompt: sendPrePrompt,
+  selectPrePrompt: selectPrePrompt,
+  sendText:sendText,
+  playAudioBuffer,
+  resumeAudioContextIfNeeded,
   
   // 요약 관련
   requestSummary: requestSummary,
