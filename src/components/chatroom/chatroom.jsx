@@ -55,7 +55,7 @@ export default function ChatRoom({ voiceStarted, voiceStopped, onRecognitionComp
     if (voiceStarted) {
       console.log('[ChatRoom] 음성 인식 시작됨');
       setIsListening(true);
-      setCurrentUserTranscript('');
+      try { webSocketService.resumeAudioContextIfNeeded?.(); } catch {}
     }
   }, [voiceStarted]);
 
@@ -437,12 +437,12 @@ export default function ChatRoom({ voiceStarted, voiceStopped, onRecognitionComp
             <div className="font-bold text-[#000000] text-[22px] mb-4">
               다음 대화는 어떠세요?
             </div>
-            <div className="flex flex-col gap-2">
+            <div className="flex gap-2 justify-center items-center">
               {suggestedQuestions.map((question, index) => (
                 <button
                   key={index}
                   onClick={() => handleQuestionClick(question)}
-                  className="p-3 text-left font-bold text-[22px] text-gray500 bg-gray200 rounded-[10px] cursor-pointer hover:bg-gray300"
+                  className="p-3 text-left font-bold text-[22px] text-gray500 bg-gray200 rounded-[10px] cursor-pointer hover:bg-gray300 w-[176px]"
                 >
                   {question}
                 </button>
