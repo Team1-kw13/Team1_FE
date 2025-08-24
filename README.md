@@ -14,9 +14,9 @@ FrontEnd Repository
  ┃ ┣ 📂fonts
  ┃ ┗ 📂images
  ┣ 📂components
+ ┃ ┣ 📂_common
  ┃ ┣ 📂chatroom
  ┃ ┣ 📂main
  ┃ ┗ 📂summary
- ┣ 📂service
- ┗ 📂utils
+ ┗ 📂service 
  ```
