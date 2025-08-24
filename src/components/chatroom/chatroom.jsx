@@ -163,7 +163,7 @@ export default function ChatRoom({ voiceStarted, voiceStopped, onRecognitionComp
         }
         
         setIsListening(false);
-        return '';
+        //return '';
       });
     };
 
@@ -173,7 +173,18 @@ export default function ChatRoom({ voiceStarted, voiceStopped, onRecognitionComp
       if (data.delta) {
         setIsAiResponding(true);
         setCurrentOutputIndex(data.output_index);
-        setCurrentAiResponse(prev => prev + data.delta);
+        //setCurrentAiResponse(prev => prev + data.delta); //12:16 주석처리
+        setCompletedConversations(prev =>
+          prev.map(conv =>
+            conv.outputIndex === data.outputIndex || (!conv.outputIndex && !conv.aiMessage)
+            ? {
+              ...conv,
+              outputIndex: data.outputIndex,
+              aiMessage: (conv.aiMessage ||'') + data.delta
+            }
+            : conv
+          )
+        )
       }
     };
 
@@ -181,46 +192,32 @@ export default function ChatRoom({ voiceStarted, voiceStopped, onRecognitionComp
     const handleTextResponseDone = (data) => {
       console.log('AI 텍스트 응답 완료:', data);
       
-      setCurrentAiResponse(finalResponse => {
-        // 완성된 응답을 Map에 저장
-        setCompletedAiResponses(prev => new Map(prev.set(data.output_index, finalResponse)));
-        
-        // 대화 업데이트
-        setCompletedConversations(prev => 
-          prev.map(conv => 
-            conv.outputIndex === data.output_index || (!conv.outputIndex && conv.id === prev[prev.length - 1]?.id)
-              ? { 
-                  ...conv, 
-                  aiMessage: finalResponse, 
-                  isComplete: true,
-                  outputIndex: data.output_index 
-                }
-              : conv
-          )
-        );
+      setCompletedConversations(prev =>
+        prev.map(conv => 
+          conv.outputIndex === data.outputIndex
+          ? {...conv, isComplete: true }
+          : conv
+        )
+      );
 
-        // AI 응답 완료 후 추천 질문 표시
-        setShowRecommendForIndex(data.output_index);
-        
-        // 대화가 일정 개수 이상이면 summary 표시
-        setCompletedConversations(prevConvs => {
-          if (prevConvs.length >= 2) {
-            setShouldShowSummary(true);
-          }
-          return prevConvs;
-        });
+      setShowRecommendForIndex(data.outputIndex);
 
-        setCurrentOutputIndex(null);
-        setIsAiResponding(false);
-        
-        //return ''; // 현재 응답 초기화
-      });
+      setTimeout(() => {
+        webSocketService.send('sonju:suggestedQuestion','suggestion.response', {output_index: data.output_index})
+      }, 1000);
+
+      if (completedConversations.length >= 3 ) {
+        setShouldShowSummary(true);
+      }
+
+      setCurrentOutputIndex(null);
+      setIsAiResponding(false);
     };
 
     // 제안 질문 수신
     const handleSuggestedQuestions = (data) => {
       console.log('제안 질문들:', data);
-      if (data.questions) {
+      if (data.questions && Array.isArray(data.questions)) {
         setSuggestedQuestions(data.questions);
       }
     };
@@ -319,7 +316,15 @@ export default function ChatRoom({ voiceStarted, voiceStopped, onRecognitionComp
                 outputIndex={conversation.outputIndex}
                 isTyping={false}
               />
-            )}
+            )}{
+              /* 현재 진행 중인 사용자 음성 전사 */}
+              {/* {currentUserTranscript && (
+                <div className="conversation-block">
+                  <UserBubble text={currentUserTranscript} />
+                </div>
+              )}
+               */}
+              
             
             {/* 해당 대화에 대한 제안 질문들 */}
             {showRecommendForIndex === (conversation.outputIndex || conversation.id) && 
@@ -362,23 +367,7 @@ export default function ChatRoom({ voiceStarted, voiceStopped, onRecognitionComp
           </div>
         ))}
         
-        {/* 현재 진행 중인 사용자 음성 전사 */}
-        {currentUserTranscript && (
-          <div className="conversation-block">
-            <UserBubble text={currentUserTranscript} />
-          </div>
-        )}
         
-        {/* 현재 AI 응답 중 표시 */}
-        {isAiResponding && currentAiResponse && (
-          <div className="conversation-block">
-            <SonjuBubble 
-              text={currentAiResponse} 
-              isTyping={true}
-              outputIndex={currentOutputIndex}
-            />
-          </div>
-        )}
         
         {/* 대화 요약 */}
         {shouldShowSummary && <ChatSummary />}
