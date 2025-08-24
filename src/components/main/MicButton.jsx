@@ -137,6 +137,9 @@ export default function MicButton({ onListeningStart, onListeningStop, onTranscr
     if (stoppingRef.current) return;
     stoppingRef.current = true;
 
+    while (!hasAudioRef.current < 1) {
+      await new Promise( r => setTimeout (r, 50));
+    }
     setIsRecording(false);
 
     if (audioSystemRef.current) {
