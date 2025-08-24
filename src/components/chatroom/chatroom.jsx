@@ -190,6 +190,7 @@ export default function ChatRoom({ voiceStarted, voiceStopped, onRecognitionComp
       outputIndex: prev.length
     }]);
     setSuggestedQuestions([]);
+    webSocketService.sendText(question);
   };
 
   return (
