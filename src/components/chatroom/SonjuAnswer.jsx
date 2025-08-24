@@ -30,7 +30,9 @@ export default function SonjuAnswer({ text, onTypingComplete, isTyping = false }
     }
 
     // 백엔드에서 붙는 stray 'undefined' 토큰 방지
-    const safe = text.replace(/(undefined)+$/u, "");
+    const safe = text
+    .replace(/(undefined)+$/u, "")
+    .replace(/\*\*(.*?)\*\*/g, "$1");
 
     //만약 isTyping이 false라면 전체 텍스트 표시
     if (!isTyping) {
