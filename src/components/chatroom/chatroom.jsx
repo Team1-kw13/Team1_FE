@@ -230,7 +230,7 @@ export default function ChatRoom({ voiceStarted, voiceStopped, onRecognitionComp
             <div className="font-bold text-[#000000] text-[22px] mb-4">
               다음 대화는 어떠세요?
             </div>
-            <div className="flex gap-2 justify-center items-center">
+            <div className="flex gap-2 justify-between items-center pb-[24px]">
               {suggestedQuestions.map((question, index) => (
                 <button
                   key={index}

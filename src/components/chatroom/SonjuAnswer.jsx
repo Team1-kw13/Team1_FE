@@ -48,7 +48,7 @@ export default function SonjuAnswer({ text }) {
   const parts = useMemo(() => splitToLinkParts(displayText), [displayText]);
 
   return (
-    <div className="flex justify-center items-center mt-[12px] mx-[24px]">
+    <div className="flex justify-center items-center mt-[12px] mx-[24px] mb-[27px]">
       <div className="font-bold text-[24px] w-full break-words whitespace-pre-wrap overflow-x-hidden">
         {parts.map((p, idx) =>
           p.type === "link" ? (
