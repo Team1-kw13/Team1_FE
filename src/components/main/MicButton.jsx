@@ -78,6 +78,7 @@ export default function MicButton({ onListeningStart, onListeningStop, onTranscr
         onTranscriptUpdate?.(transcript);
         onListeningStop?.(transcript);
         if (/전화번호|전화해|전화 걸어|전화/i.test(transcript)) {
+          try { window.dispatchEvent(new CustomEvent('sonju:call_intent', { detail: transcript })); } catch {}
           onCallIntent?.(transcript);
         }
       };

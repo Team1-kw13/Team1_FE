@@ -20,6 +20,20 @@ export default function ChatRoom({ voiceStarted, voiceStopped, onRecognitionComp
   const {initialMessage} = useParams();
   const [isListening, setIsListening] = useState(false);
 
+  // 전역 “전화 의도” 이벤트 수신
+  useEffect(() => {
+    const onCallIntent = (e) => {
+      const t = (e?.detail || '전화').trim();
+      setShowCall(true); // 🔴 바로 Call UI 열기
+      // 타임라인에도 사용자 발화 추가(선택)
+      setMessages((prev) => [...prev, { type: 'user', content: t, timestamp: new Date() }]);
+      // 서버에 텍스트로도 보내 tel을 받도록 유도(오디오 실패해도 안전)
+      try { webSocketService.sendText(t.includes('전화번호') ? t : '전화번호 알려줘'); } catch {}
+    };
+    window.addEventListener('sonju:call_intent', onCallIntent);
+    return () => window.removeEventListener('sonju:call_intent', onCallIntent);
+  }, []);
+
   // 🔥 음성 시작/중지 신호를 props로 받아서 처리
   useEffect(() => {
     if (voiceStarted) {
@@ -183,16 +197,16 @@ export default function ChatRoom({ voiceStarted, voiceStopped, onRecognitionComp
           <SonjuBubble text={currentAiResponse} isTyping={true} />
         )}
 
-        {officeInfo && (
-          <>
-            <Place communityCenter="가까운 동사무소" position={officeInfo.pos} />
-            {showCall && <Call communityCenter="가까운 동사무소" number={officeInfo.tel} />}
-          </>
+        {officeInfo?.pos && !showCall && (
+          <Place communityCenter="가까운 동사무소" position={officeInfo.pos} />
         )}
 
+        {showCall && (
+          officeInfo?.tel
+            ? <Call communityCenter="가까운 동사무소" number={officeInfo.tel} />
+            : <SonjuBubble text="전화번호를 조회하고 있어요…" />
+        )}
 
-        
-        
         {suggestedQuestions.length > 0 && (
           <div className="mt-[40px] px-6">
             <div className="font-bold text-[#000000] text-[22px] mb-4">
