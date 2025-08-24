@@ -391,6 +391,11 @@ function stopSpeaking(hasAudio=true) {
   return send(CHANNEL,'input_audio_buffer.end');
 }
 
+function sendText(text) {
+  console.log('📝 텍스트 전송:', text);
+  return send('openai:conversation', 'input_text', {text});
+}
+
 function selectPrePrompt(option) {
   return send(CHANNEL, 'preprompted', {enum: option});
 }
@@ -490,7 +495,7 @@ const webSocketService = {
   
   // 대화 관련
   startSpeaking: startSpeaking,
-  sendAudioBuffer: sendAudioBuffer,
+  sendAudioPCM16: sendAudioPCM16,
   stopSpeaking: stopSpeaking,
   selectPrePrompt: selectPrePrompt,
   sendText:sendText,
