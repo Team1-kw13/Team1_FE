@@ -211,9 +211,9 @@ export default function ChatRoom({ voiceStarted, voiceStopped, onRecognitionComp
           )
         ))}
         
-        {isAiResponding && currentAiResponse && (
+        {/* {isAiResponding && currentAiResponse && (
           <SonjuBubble text={currentAiResponse} isTyping={true} />
-        )}
+        )} */}
 
         {officeInfo?.pos && !showCall && (
           <Place communityCenter="가까운 동사무소" position={officeInfo.pos} />
@@ -226,7 +226,7 @@ export default function ChatRoom({ voiceStarted, voiceStopped, onRecognitionComp
         )}
 
         {suggestedQuestions.length > 0 && (
-          <div className="mt-[40px] px-6">
+          <div className="px-6">
             <div className="font-bold text-[#000000] text-[22px] mb-4">
               다음 대화는 어떠세요?
             </div>
