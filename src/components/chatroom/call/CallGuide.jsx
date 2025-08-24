@@ -6,7 +6,7 @@ export default function Call({ communityCenter, number = "02-1234-5678" }) {
 
     return (
         <div className="w-full flex flex-col px-6 pb-[12px]">
-            <div className="text-[24px] text-[#222222] font-bold">{communityCenter} 전화번호는<br/>{number} 입니다.<br/>전화 연결을 원하시면 아래 버튼을 눌러<br/>주세요.</div>
+            <div className="text-[24px] text-[#222222] font-bold"></div>
             <div className="flex flex-col items-center">
                 <button
                     onClick={handleCall}
