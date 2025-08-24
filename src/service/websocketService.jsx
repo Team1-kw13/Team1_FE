@@ -240,7 +240,7 @@ async function playNextAudio() {
   source.start();
 }
 
-// 핸들러 등록
+// 핸들러 등록 (중복 방지)
 function on(channelOrType, typeOrHandler, handler) {
   let key;
   let handlerFunction;
@@ -354,8 +354,13 @@ function stopSpeaking(hasAudio=true) {
   return send(CHANNEL,'input_audio_buffer.end');
 }
 
+function sendText(text) {
+  console.log('📝 텍스트 전송:', text);
+  return send('openai:conversation', 'input_text', {text});
+}
+
 // 사전 정의된 프롬프트 전송
-function sendPrePrompt(option) {
+function selectPrePrompt(option) {
   return send(CHANNEL, 'preprompted', { enum: option });
 }
 
@@ -460,10 +465,9 @@ const webSocketService = {
   startSpeaking: startSpeaking,
   sendAudioPCM16,
   stopSpeaking: stopSpeaking,
-  sendPrePrompt: sendPrePrompt,
-  playAudioBuffer: playAudioBuffer,
-  //selectPrePrompt: selectPrePrompt,
-  //sendText:sendText,
+  selectPrePrompt: selectPrePrompt,
+  sendText:sendText,
+  playAudioBuffer,
   
   // 요약 관련
   requestSummary: requestSummary,

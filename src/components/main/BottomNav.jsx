@@ -13,7 +13,8 @@ export default function BottomNav({
   onRecognitionError,
 //  onRecognitionComplete, //음성 인식 완료 추가
 //  isInChatRoom = false, //채팅창 여부 추가
-  currentStep 
+  currentStep,
+  onCallIntent
 }) {
   const navigate = useNavigate();
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -54,6 +55,7 @@ export default function BottomNav({
           onTranscriptUpdate={onTranscriptUpdate}
           onRecognitionError={onRecognitionError}
           currentStep={currentStep}
+          onCallIntent={onCallIntent}
         />
 
         <div onClick={handleUserInfoClick} className="flex flex-col items-center gap-[6px] pr-[47.25px] pt-[46px]">

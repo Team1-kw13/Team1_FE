@@ -13,7 +13,7 @@ function float32ToInt16(float32Array) {
 }
 
 // 오디오 캡처 시작 (PCM16 ArrayBuffer 콜백으로 전달)
-async function startAudioCapture(onAudioData) {
+async function startAudioRecognition(onAudioData) {
   const stream = await navigator.mediaDevices.getUserMedia({
     audio: {
       sampleRate: 24000,
@@ -41,46 +41,23 @@ async function startAudioCapture(onAudioData) {
   return { stream, audioContext, processor };
 }
 
-// 오디오 캡처 정지
-async function stopAudioCapture(stream, audioContext, processor) {
-  try {
-    if (processor) {
-      processor.onaudioprocess = null;
-      processor.disconnect();
-    }
-  } catch (e) {
-    console.warn('Processor disconnect error:', e);
-  }
-
-  try {
-    if (stream) {
-      stream.getTracks().forEach(track => track.stop());
-    }
-  } catch (e) {
-    console.warn('Stream stop error:', e);
-  }
-
+// 오디오 캡처 정지/정리
+async function stopAudioRecognition(stream, audioContext, processor) {
+  try { if (processor) { processor.onaudioprocess = null; processor.disconnect(); } } catch {}
+  try { if (stream) stream.getTracks().forEach(t => t.stop()); } catch {}
   try {
     if (audioContext && audioContext.state !== "closed") {
       await audioContext.close();
     }
-  } catch (e) {
-    console.warn('Audio context close error:', e);
-  }
+  } catch {}
 }
 
-export default function MicButton({ 
-  onListeningStart, 
-  onListeningStop, 
-  onTranscriptUpdate, 
-  currentStep 
-}) {
+export default function MicButton({ onListeningStart, onListeningStop, onTranscriptUpdate, currentStep,onCallIntent }) {
   const [isRecording, setIsRecording] = useState(false);
   const audioSystemRef = useRef(null);
   //첫PCM청크가 서버에 도달하기 전에 stopSpeaking()을 안보내도록
   const hasAudioRef=useRef(false); 
   const stoppingRef = useRef(false);
-  const audioDataCountRef = useRef(0);
 
   // 브라우저 스피치 인식 추가
   const recognitionRef = useRef(null);
@@ -100,21 +77,18 @@ export default function MicButton({
         console.log("🎤 브라우저 스피치 인식 결과:", transcript);
         onTranscriptUpdate?.(transcript);
         onListeningStop?.(transcript);
+        if (/전화번호|전화해|전화 걸어|전화/i.test(transcript)) {
+          try { window.dispatchEvent(new CustomEvent('sonju:call_intent', { detail: transcript })); } catch {}
+          onCallIntent?.(transcript);
+        }
       };
 
       rec.onerror = (event) => {
         console.error("스피치 인식 에러:", event.error);
       };
 
-      rec.onstart = () => { 
-        recogActiveRef.current = true; 
-        console.log("브라우저 스피치 인식 시작");
-      };
-      
-      rec.onend = () => { 
-        recogActiveRef.current = false; 
-        console.log("브라우저 스피치 인식 종료");
-      };
+      rec.onstart = () => { recogActiveRef.current = true; };
+      rec.onend   = () => { recogActiveRef.current = false; };
 
       recognitionRef.current = rec;
     }
@@ -122,7 +96,7 @@ export default function MicButton({
     return () => {
       if (audioSystemRef.current) {
         const { stream, audioContext, processor } = audioSystemRef.current;
-        stopAudioCapture(stream, audioContext, processor);
+        stopAudioRecognition(stream, audioContext, processor);
       }
     };
   }, [onListeningStop, onTranscriptUpdate]);
@@ -131,41 +105,26 @@ export default function MicButton({
     try {
       if (stoppingRef.current) return;
 
-      console.log("🎤 음성 녹음 시작");
-
-      // WebSocket 연결 확인
+      // WebSocket 연결 (필요 시)
       if (!webSocketService.isConnected) {
         await webSocketService.connect(import.meta.env.VITE_WEBSOCKET_URL);
       }
 
       setIsRecording(true);
       onListeningStart?.();
-      hasAudioRef.current = false;
-      audioDataCountRef.current = 0;
 
-      // 1단계: 서버에 음성 발화 시작 알림 (commit)
-      //const commitSent = webSocketService.startSpeaking();
-      //console.log("📤 input_audio_buffer.commit 전송:", commitSent);
+      // 서버로 “녹음 시작” 알림 (시작 시 commit 보내지 않기)
       webSocketService.startSpeaking();
 
-      // 2단계: 오디오 캡처 시작 및 실시간 전송
-      const audioSystem = await startAudioCapture((arrayBuffer) => {
-        const sent = webSocketService.sendAudioPCM16(arrayBuffer);
-        if (sent) {
-          hasAudioRef.current = true;
-          audioDataCountRef.current++;
-        }
+      // 오디오 캡처 시작 후 청크를 서버로 전송
+      const audioSystem = await startAudioRecognition((arrayBuffer) => {
+        const ok=webSocketService.sendAudioPCM16(arrayBuffer);
+        if(ok) hasAudioRef.current=true; //최소 1청크 보냈음 표시
       });
       audioSystemRef.current = audioSystem;
 
-      // 3단계: 브라우저 스피치 인식 시작 (백업)
-      try {
-        if (recognitionRef.current) {
-          recognitionRef.current.start();
-        }
-      } catch (e) {
-        console.warn("브라우저 스피치 인식 시작 실패:", e);
-      }
+      // 브라우저 스피치 인식 시작 (즉시 텍스트 얻기)
+      try { recognitionRef.current?.start(); } catch {}
 
     } catch (e) {
       console.error("녹음 시작 실패:", e);
@@ -178,36 +137,22 @@ export default function MicButton({
     if (stoppingRef.current) return;
     stoppingRef.current = true;
 
-    console.log("🛑 음성 녹음 중지");
-
     setIsRecording(false);
 
-    // 오디오 캡처 중지
     if (audioSystemRef.current) {
       const { stream, audioContext, processor } = audioSystemRef.current;
-      await stopAudioCapture(stream, audioContext, processor);
+      await stopAudioRecognition(stream, audioContext, processor);
       audioSystemRef.current = null;
     }
 
-    // 브라우저 스피치 인식 중지
-    if (recogActiveRef.current) {
-      try {
-        recognitionRef.current?.stop();
-      } catch (e) {
-        console.warn("브라우저 스피치 인식 중지 실패:", e);
-      }
-    }
+    // 브라우저 스피치 인식 정지
+    if (recogActiveRef.current) { try { recognitionRef.current?.stop(); } catch {} }
 
-    // 서버에 음성 발화 종료 알림
-    const endSent = webSocketService.stopSpeaking(hasAudioRef.current);
-    console.log("📤 input_audio_buffer.end 전송:", endSent);
-    
-    hasAudioRef.current = false;
-    audioDataCountRef.current = 0;
+    // 서버로 녹음 끝 알림 (commit -> end)
+    webSocketService.stopSpeaking(hasAudioRef.current);
+    hasAudioRef.current=false;
+
     stoppingRef.current = false;
-
-    // 상위 컴포넌트에 중지 알림
-    onListeningStop?.();
   };
 
   const handleMicClick = () => {
@@ -228,7 +173,7 @@ export default function MicButton({
         }`} 
       //disabled={isActive} //처리 중일 때는 비활성화
       style={{overflow: 'visible'}} //shadow 잘림 방지
-    >
+      >
       <img 
         src={isActive ? stopIcon : micIcon} 
         alt="Mic" 

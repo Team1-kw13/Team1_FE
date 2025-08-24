@@ -9,12 +9,16 @@ import SonjuListening from "./SonjuListening";
 import UserBubble from "./UserBubble";
 import webSocketService from "../../service/websocketService";
 
-export default function ChatRoom({ voiceStarted, voiceStopped, onRecognitionComplete, transcriptFromPage }) {
+
+export default function ChatRoom({ voiceStarted, voiceStopped, onRecognitionComplete,transcriptFromPage }) {
+  const [messages, setMessages] = useState([]);
   const [isAiResponding, setIsAiResponding] = useState(false);
   const [currentAiResponse, setCurrentAiResponse] = useState('');
   const [currentOutputIndex, setCurrentOutputIndex] = useState(null);
   const [suggestedQuestions, setSuggestedQuestions] = useState([]);
   const [officeInfo, setOfficeInfo] = useState(null);
+  const [showCall, setShowCall] = useState(false);
+  const {initialMessage} = useParams();
   const [isListening, setIsListening] = useState(false);
   const [hasInitMessage, setHasInitMessage] = useState(false);
   
@@ -30,11 +34,23 @@ export default function ChatRoom({ voiceStarted, voiceStopped, onRecognitionComp
   
   // 완성된 AI 응답을 저장하는 상태
   const [completedAiResponses, setCompletedAiResponses] = useState(new Map());
-  
-  const { initialMessage } = useParams();
   const location = useLocation();
 
-  // 음성 시작/중지 처리
+  // 전역 “전화 의도” 이벤트 수신
+  useEffect(() => {
+    const onCallIntent = (e) => {
+      const t = (e?.detail || '전화').trim();
+      setShowCall(true); // 🔴 바로 Call UI 열기
+      // 타임라인에도 사용자 발화 추가(선택)
+      setMessages((prev) => [...prev, { type: 'user', content: t, timestamp: new Date() }]);
+      // 서버에 텍스트로도 보내 tel을 받도록 유도(오디오 실패해도 안전)
+      try { webSocketService.sendText(t.includes('전화번호') ? t : '전화번호 알려줘'); } catch {}
+    };
+    window.addEventListener('sonju:call_intent', onCallIntent);
+    return () => window.removeEventListener('sonju:call_intent', onCallIntent);
+  }, []);
+
+  // 🔥 음성 시작/중지 신호를 props로 받아서 처리
   useEffect(() => {
     if (voiceStarted) {
       console.log('[ChatRoom] 음성 인식 시작됨');
@@ -69,7 +85,7 @@ export default function ChatRoom({ voiceStarted, voiceStopped, onRecognitionComp
       // preprompt로 전송 -> 왜?????
       setTimeout(() => {
         if (webSocketService.isConnected) {
-          webSocketService.sendPrePrompt(transcriptFromPage);
+          webSocketService.selectPrePrompt(transcriptFromPage);
         }
       }, 100);
     }
@@ -95,7 +111,7 @@ export default function ChatRoom({ voiceStarted, voiceStopped, onRecognitionComp
       // preprompt로 전송
       setTimeout(() => {
         if (webSocketService.isConnected) {
-          webSocketService.sendPrePrompt(decodedMessage);
+          webSocketService.selectPrePrompt(decodedMessage);
         }
       }, 500);
     }
@@ -121,7 +137,7 @@ export default function ChatRoom({ voiceStarted, voiceStopped, onRecognitionComp
       // preprompt로 전송
       setTimeout(() => {
         if (webSocketService.isConnected) {
-          webSocketService.sendPrePrompt(transcript);
+          webSocketService.selectPrePrompt(transcript);
         }
       }, 500);
     }
@@ -163,7 +179,7 @@ export default function ChatRoom({ voiceStarted, voiceStopped, onRecognitionComp
         }
         
         setIsListening(false);
-        //return '';
+        return '';
       });
     };
 
@@ -176,10 +192,10 @@ export default function ChatRoom({ voiceStarted, voiceStopped, onRecognitionComp
         //setCurrentAiResponse(prev => prev + data.delta); //12:16 주석처리
         setCompletedConversations(prev =>
           prev.map(conv =>
-            conv.outputIndex === data.outputIndex || (!conv.outputIndex && !conv.aiMessage)
+            conv.outputIndex === data.output_index || (!conv.outputIndex && !conv.aiMessage)
             ? {
               ...conv,
-              outputIndex: data.outputIndex,
+              outputIndex: data.output_index,
               aiMessage: (conv.aiMessage ||'') + data.delta
             }
             : conv
@@ -194,13 +210,13 @@ export default function ChatRoom({ voiceStarted, voiceStopped, onRecognitionComp
       
       setCompletedConversations(prev =>
         prev.map(conv => 
-          conv.outputIndex === data.outputIndex
+          conv.outputIndex === data.output_index
           ? {...conv, isComplete: true }
           : conv
         )
       );
 
-      setShowRecommendForIndex(data.outputIndex);
+      setShowRecommendForIndex(data.output_index);
 
       setTimeout(() => {
         webSocketService.send('sonju:suggestedQuestion','suggestion.response', {output_index: data.output_index})
@@ -214,7 +230,38 @@ export default function ChatRoom({ voiceStarted, voiceStopped, onRecognitionComp
       setIsAiResponding(false);
     };
 
+    // AI 음성 데이터 수신 (delta) - base64로 인코딩된 오디오 데이터
+    const handleAudioDelta = async (data) => {
+      console.log('AI 오디오 데이터 수신:', data);
+      try {
+        if (data.delta) {
+          // base64 디코딩 후 오디오 재생
+          const audioData = atob(data.delta);
+          const arrayBuffer = new ArrayBuffer(audioData.length);
+          const uint8Array = new Uint8Array(arrayBuffer);
+          for (let i = 0; i < audioData.length; i++) {
+            uint8Array[i] = audioData.charCodeAt(i);
+          }
+          await webSocketService.playAudioBuffer(arrayBuffer);
+        }
+      } catch (error) {
+        console.error('AI 오디오 재생 실패:', error);
+      }
+    };
+
+    // AI 오디오 재생 완료 (done)
+    const handleAudioDone = (data) => {
+      console.log('AI 오디오 재생 완료:', data);
+    };
+
     // 제안 질문 수신
+    const handleCallIntent = (transcript) => {
+      setShowCall(true);
+      const ask = transcript || '가까운 동사무소 전화번호 알려줘';
+      setMessages(prev => [...prev, { type: 'user', content: ask, timestamp: new Date() }]);
+      webSocketService.sendText(ask);
+    };
+
     const handleSuggestedQuestions = (data) => {
       console.log('제안 질문들:', data);
       if (data.questions && Array.isArray(data.questions)) {
@@ -252,6 +299,8 @@ export default function ChatRoom({ voiceStarted, voiceStopped, onRecognitionComp
     webSocketService.on('openai:conversation', 'input_audio_transcript.done', handleInputAudioTranscriptDone);
     webSocketService.on('openai:conversation', 'response.text.delta', handleTextResponseDelta); // 텍스트 응답
     webSocketService.on('openai:conversation', 'response.text.done', handleTextResponseDone);
+    webSocketService.on('openai:conversation', 'response.audio.delta', handleAudioDelta); // 텍스트 응답
+    webSocketService.on('openai:conversation', 'response.audio.done', handleAudioDone);
     webSocketService.on('openai:conversation','response.audio_transcript.delta',handleTextResponseDelta);
     webSocketService.on('sonju:suggestedQuestion', 'suggestion.response', handleSuggestedQuestions);
     webSocketService.on('sonju:officeInfo', 'officeInfo', handleOfficeInfo);
@@ -263,6 +312,8 @@ export default function ChatRoom({ voiceStarted, voiceStopped, onRecognitionComp
       webSocketService.off('openai:conversation', 'input_audio_transcript.done', handleInputAudioTranscriptDone);
       webSocketService.off('openai:conversation', 'response.text.delta', handleTextResponseDelta);
       webSocketService.off('openai:conversation', 'response.text.done', handleTextResponseDone);
+      webSocketService.off('openai:conversation', 'response.audio.delta', handleAudioDelta); // 텍스트 응답
+      webSocketService.off('openai:conversation', 'response.audio.done', handleAudioDone);
       webSocketService.off('openai:conversation','response.audio_transcript.delta', handleTextResponseDelta);
       webSocketService.off('sonju:suggestedQuestion', 'suggestion.response', handleSuggestedQuestions);
       webSocketService.off('sonju:officeInfo', 'officeInfo', handleOfficeInfo);
@@ -287,7 +338,7 @@ export default function ChatRoom({ voiceStarted, voiceStopped, onRecognitionComp
     // 서버에 전송
     setTimeout(() => {
       if (webSocketService.isConnected) {
-        webSocketService.sendPrePrompt(question);
+        webSocketService.selectPrePrompt(question);
       }
     }, 100);
   };
@@ -367,10 +418,40 @@ export default function ChatRoom({ voiceStarted, voiceStopped, onRecognitionComp
           </div>
         ))}
         
+        {isAiResponding && (
+          <SonjuBubble text={currentAiResponse} isTyping={true} />
+        )}
+
+        {officeInfo?.pos && !showCall && (
+          <Place communityCenter="가까운 동사무소" position={officeInfo.pos} />
+        )}
+
+        {showCall && (
+          officeInfo?.tel
+            ? <Call communityCenter="가까운 동사무소" number={officeInfo.tel} />
+            : <SonjuBubble text="전화번호를 조회하고 있어요…" />
+        )}
+
+        {suggestedQuestions.length > 0 && (
+          <div className="mt-[40px] px-6">
+            <div className="font-bold text-[#000000] text-[22px] mb-4">
+              다음 대화는 어떠세요?
+            </div>
+            <div className="flex flex-col gap-2">
+              {suggestedQuestions.map((question, index) => (
+                <button
+                  key={index}
+                  onClick={() => handleQuestionClick(question)}
+                  className="p-3 text-left font-bold text-[22px] text-gray500 bg-gray200 rounded-[10px] cursor-pointer hover:bg-gray300"
+                >
+                  {question}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
         
-        
-        {/* 대화 요약 */}
-        {shouldShowSummary && <ChatSummary />}
+        <ChatSummary />
       </div>
 
       {/* 사용자 음성 실시간 전사 표시 */}
