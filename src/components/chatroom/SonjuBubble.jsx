@@ -22,8 +22,8 @@ export default function SonjuBubble({ text }) {
   }, [text]);
 
   return (
-    <div className="flex flex-col pb-[24px]">
-      <div className="flex justify-start items-center ml-[23px] mt-[11px]">
+    <div className="flex flex-col">
+      <div className="flex justify-start items-center ml-[23px]">
         <img src={SunImg} alt="손주" className="w-[30px] h-[30px] mr-[10px]" />
         <div className={`font-bold text-[20px] gap-[10px] max-w-[280px] max-h-[164px]
                         bg-gradient-to-r from-[#666666] to-[#000000] bg-clip-text text-transparent bg-[length:200%_200%] animate-gradient`}
