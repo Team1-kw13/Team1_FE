@@ -64,7 +64,7 @@ function connect(url = import.meta.env.VITE_WEBSOCKET_URL) {
             handleMessage(message);
         } else if (event.data instanceof Blob) {
             console.log ("서버에서 받은 오디오(Blob) 메세지: ", event.data);
-            handleMessage({ type: '', data: event.data});
+            handleMessageBlob({ type: '', data: event.data});
         } else {
             console.log ("서버에서 JSON, Blob 이외의 type 메세지 수신: ", event.data);
         }
@@ -144,6 +144,99 @@ function handleMessage(data) {
   });
 
   
+}
+
+// 오디오 Blob 처리
+async function handleAudioBlob(blob) {
+  try {
+    console.log('오디오 Blob 처리 시작:', { size: blob.size, type: blob.type });
+    
+    // 최소 크기 체크
+    // if (blob.size < 100) {
+    //   console.warn('오디오 Blob 크기가 너무 작음:', blob.size);
+    //   return;
+    // }
+    
+    const arrayBuffer = await blob.arrayBuffer();
+    
+    // PCM 데이터로 직접 처리
+    await playPCMAudio(arrayBuffer);
+    
+  } catch (error) {
+    console.error('오디오 Blob 처리 실패:', error);
+  }
+}
+
+// PCM 오디오 직접 재생
+async function playPCMAudio(arrayBuffer) {
+  if (!audioContext) {
+    console.warn('오디오 컨텍스트가 초기화되지 않음');
+    return;
+  }
+  
+  try {
+    // 오디오 컨텍스트가 suspended 상태라면 재개
+    if (audioContext.state === 'suspended') {
+      await audioContext.resume();
+    }
+    
+    // PCM 16비트 데이터를 Float32Array로 변환
+    const pcmData = new Int16Array(arrayBuffer);
+    const floatData = new Float32Array(pcmData.length);
+    
+    for (let i = 0; i < pcmData.length; i++) {
+      floatData[i] = pcmData[i] / 32768; // 16비트를 -1~1 범위로 정규화
+    }
+    
+    // AudioBuffer 생성
+    const audioBuffer = audioContext.createBuffer(1, floatData.length, 24000);
+    audioBuffer.getChannelData(0).set(floatData);
+    
+    // 재생 큐에 추가
+    audioQueue.push(audioBuffer);
+    
+    if (!isPlayingAudio) {
+      playNextAudio();
+    }
+  } catch (error) {
+    console.error('PCM 오디오 재생 실패:', error);
+  }
+}
+
+// 오디오 재생
+async function playAudioBuffer(arrayBuffer) {
+  if (!audioContext) return;
+  
+  try {
+    const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
+    audioQueue.push(audioBuffer);
+    
+    if (!isPlayingAudio) {
+      playNextAudio();
+    }
+  } catch (error) {
+    console.error('오디오 디코딩 실패:', error);
+  }
+}
+
+async function playNextAudio() {
+  if (audioQueue.length === 0) {
+    isPlayingAudio = false;
+    return;
+  }
+  
+  isPlayingAudio = true;
+  const audioBuffer = audioQueue.shift();
+  
+  const source = audioContext.createBufferSource();
+  source.buffer = audioBuffer;
+  source.connect(audioContext.destination);
+  
+  source.onended = () => {
+    playNextAudio();
+  };
+  
+  source.start();
 }
 
 // 핸들러 등록 (중복 방지)
@@ -237,19 +330,17 @@ function startSpeaking() {
 // PCM16 ArrayBuffer(또는 Int16Array.buffer)를 그대로 보냄?
 function sendAudioPCM16(base64AudioData) {
   if (!ws || ws.readyState !== WebSocket.OPEN) return false;
-  try { 
-    const binaryString = atob (base64AudioData);
-    const bytes = new Uint8Array (binaryString.length);
-    for (let i = 0; i < binaryString.length; i++) {
-        bytes[i] = binaryString.charCodeAt(i);
-    }    
-
-    ws.send(bytes.buffer);
-    console.log("오디오 청크 전송 크기: ", bytes.length, 'bytes');
-    return true;
-  } catch (e) { 
-    console.error("사용자 음성 발화 전송 실패: ", e); 
-    return false; 
+  try {
+    // ArrayBuffer를 base64로 인코딩
+    const uint8Array = new Uint8Array(arrayBuffer);
+    const base64 = btoa(String.fromCharCode.apply(null, uint8Array));
+    
+    return send(CHANNEL, 'input_audio_buffer.append', {
+      audio_buffer: base64
+    });
+  } catch (error) {
+    console.error("오디오 전송 실패:", error);
+    return false;
   }
 }
 
@@ -367,6 +458,7 @@ const webSocketService = {
   stopSpeaking: stopSpeaking,
   selectPrePrompt: selectPrePrompt,
   sendText:sendText,
+  playAudioBuffer,
   
   // 요약 관련
   requestSummary: requestSummary,
