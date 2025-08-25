@@ -22,5 +22,5 @@ export default function PlaceMap({ officeInfo }) {
     waitForSDK();
   }, [officeInfo]);
 
-  return <div ref={ref} className="w-[124px] h-[124px] rounded-[20px] border-[1px] border-black cursor-pointer" />;
+  return <div ref={ref} className="w-[124px] h-[124px] rounded-[20px] border-[1px] border-black cursor-pointer mb-[24px]" />;
 }
