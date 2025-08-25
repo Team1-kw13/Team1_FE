@@ -9,7 +9,6 @@ import SonjuListening from "./SonjuListening";
 import UserBubble from "./UserBubble";
 import webSocketService from "../../service/websocketService";
 
-
 export default function ChatRoom({ voiceStarted, voiceStopped, onRecognitionComplete }) {
   const [messages, setMessages] = useState([]);
   const [isAiResponding, setIsAiResponding] = useState(false);
@@ -18,59 +17,74 @@ export default function ChatRoom({ voiceStarted, voiceStopped, onRecognitionComp
   const [suggestedQuestions, setSuggestedQuestions] = useState([]);
   const [officeInfo, setOfficeInfo] = useState(null);
   const [showCall, setShowCall] = useState(false);
-  const {initialMessage} = useParams();
+  const { initialMessage } = useParams();
   const [isListening, setIsListening] = useState(false);
   const [hasInitMessage, setHasInitMessage] = useState(false);
 
-  // 전역 “전화 의도” 이벤트 수신
+  // 전역 "전화 의도" 이벤트 수신
   useEffect(() => {
     const onCallIntent = (e) => {
       const t = (e?.detail || '전화').trim();
-      setShowCall(true); // 🔴 바로 Call UI 열기
-      // 타임라인에도 사용자 발화 추가(선택)
-      setMessages((prev) => [...prev, { type: 'user', content: t, timestamp: new Date() }]);
-      // 서버에 텍스트로도 보내 tel을 받도록 유도(오디오 실패해도 안전)
-      try { webSocketService.sendText(t.includes('전화번호') ? t : '전화번호 알려줘'); } catch {}
+      setShowCall(true);
+      // 타임라인에도 사용자 발화 추가
+      setMessages((prev) => [...prev, { 
+        type: 'user', 
+        content: t, 
+        timestamp: new Date(),
+        id: Date.now() // 고유 ID 추가
+      }]);
+      // 서버에 텍스트로도 보내기
+      try { 
+        webSocketService.sendText(t.includes('전화번호') ? t : '전화번호 알려줘'); 
+      } catch {}
     };
     window.addEventListener('sonju:call_intent', onCallIntent);
     return () => window.removeEventListener('sonju:call_intent', onCallIntent);
   }, []);
 
-  // 🔥 음성 시작/중지 신호를 props로 받아서 처리
+  // 음성 시작/중지 신호 처리
   useEffect(() => {
     if (voiceStarted) {
       console.log('[ChatRoom] 음성 인식 시작됨');
       setIsListening(true);
-      try { webSocketService.resumeAudioContextIfNeeded?.(); } catch {}
+      try { 
+        webSocketService.resumeAudioContextIfNeeded?.(); 
+      } catch {}
     }
   }, [voiceStarted]);
 
   useEffect(() => {
     if (voiceStopped) {
       console.log('[ChatRoom] 음성 인식 중지됨');
-    }      
-    setIsListening(false);
+      setIsListening(false);
+    }
   }, [voiceStopped]);
 
-  // 초기 메시지 처리
+  // 초기 메시지 처리 (메인에서 전달받은 메시지)
   useEffect(() => {
     if (initialMessage && !hasInitMessage) {
       const decodedMessage = decodeURIComponent(initialMessage);
-      console.log('초기 메세지: ', decodedMessage);
+      console.log('초기 메시지:', decodedMessage);
 
+      // 초기 메시지를 UserBubble로 추가
       setMessages(prev => [...prev, {
         type: 'user',
         content: decodedMessage,
-        timestamp: new Date()
+        timestamp: new Date(),
+        id: `init-${Date.now()}` // 고유 ID
       }]);
 
       setHasInitMessage(true);
-      webSocketService.sendText(decodedMessage);
-      // setTimeout(() => {
-      //   if (webSocketService.isConnected) {
-      //     webSocketService.sendText(decodedMessage);
-      //   }
-      // }, 500);
+      
+      // 서버로 텍스트 전송
+      if (webSocketService.isConnected) {
+        webSocketService.sendText(decodedMessage);
+      } else {
+        // WebSocket이 연결되지 않은 경우 연결 후 전송
+        webSocketService.connect(import.meta.env.VITE_WEBSOCKET_URL).then(() => {
+          webSocketService.sendText(decodedMessage);
+        });
+      }
     }
   }, [initialMessage, hasInitMessage]);
 
@@ -79,91 +93,90 @@ export default function ChatRoom({ voiceStarted, voiceStopped, onRecognitionComp
     if (!webSocketService.isConnected) {
       webSocketService.connect(import.meta.env.VITE_WEBSOCKET_URL);
     }
-    
-    // const handleUserVoiceTranscript = (data) => {
-    //   console.log('사용자 음성 인식 실시간: ', data);
-    // };    
-    
+
+    // 사용자 음성 인식 완료 처리
     const handleUserVoiceComplete = (data) => {
       const text = (data?.transcript || "").trim();
       
       if (text) {
+        console.log('사용자 음성 인식 완료:', text);
+        
+        // 새로운 사용자 메시지 추가
         setMessages(prev => [...prev, {
-          type : 'user', 
-          content: text, 
+          type: 'user',
+          content: text,
           timestamp: new Date(),
-          outputIndex: data.outputIndex
-        }])
+          id: `voice-${Date.now()}` // 고유 ID
+        }]);
+        
+        // 서버로 텍스트 전송
+        webSocketService.sendText(text);
       }
+      
       setIsListening(false);
       onRecognitionComplete?.(text);
     };
 
+    // AI 응답 스트리밍 처리
     const handleTextResponse = (data) => {
-      console.log('GPT 텍스트 응답:', data);
+      console.log('GPT 텍스트 응답 스트리밍:', data);
+      
       if (data.delta) {
         setIsAiResponding(true);
-        setCurrentOutputIndex(data.outputIndex);
+        setCurrentOutputIndex(data.output_index);
         setCurrentAiResponse(prev => prev + data.delta);
       }
     };
 
+    // AI 응답 완료 처리
     const handleTextDone = (data) => {
-      console.log('GPT 응답 완료');
-      setIsAiResponding(false);
+      console.log('GPT 응답 완료:', data);
       
-      // 🔥 currentAiResponse를 직접 참조하는 대신 상태 업데이트에서 처리
-      setMessages(prev => {
-        const updated = [...prev];
-        const aiMessageIndex = updated.findIndex(
-          msg => msg.type === "ai" && msg.outputIndex === data.output_index
-        );
+      // 완성된 AI 응답을 메시지에 추가
+      if (currentAiResponse.trim()) {
+        setMessages(prev => [...prev, {
+          type: 'ai',
+          content: currentAiResponse,
+          timestamp: new Date(),
+          outputIndex: data.output_index,
+          id: `ai-${Date.now()}` // 고유 ID
+        }]);
+      }
 
-        if (aiMessageIndex >= 0) {
-          // 이미 존재 → 이어붙임
-          updated[aiMessageIndex].content += currentAiResponse;
-        } else {
-          // 새로 추가
-          updated.push({
-            type: "ai",
-            content: currentAiResponse,
-            outputIndex: data.output_index,
-            timestamp: new Date(),
-          });
-        }
-        return updated;
-      });
-
+      // 상태 초기화
+      setIsAiResponding(false);
       setCurrentAiResponse('');
       setCurrentOutputIndex(null);
     };
 
-    const handleCallIntent = (transcript) => {
-      setShowCall(true);
-      const ask = transcript || '가까운 동사무소 전화번호 알려줘';
-      setMessages(prev => [...prev, { type: 'user', content: ask, timestamp: new Date() }]);
-      webSocketService.sendText(ask);
-    };
-
+    // 추천 질문 처리
     const handleSuggestedQuestions = (data) => {
       console.log('제안 질문들:', data);
-      if (data.questions) {
+      if (data.questions && Array.isArray(data.questions)) {
         setSuggestedQuestions(data.questions);
       }
     };
 
+    // 동사무소 정보 처리
     const handleOfficeInfo = (data) => {
       console.log('동사무소 정보:', data);
-      setOfficeInfo({ tel: data.tel, pos: data.pos });
+      if (data.tel || data.pos) {
+        setOfficeInfo({ 
+          tel: data.tel, 
+          pos: data.pos 
+        });
+      }
     };
 
+    // 에러 처리
     const handleError = (data) => {
       console.error('서버 에러:', data);
-      alert(`오류가 발생했습니다: ${data.message}`);
+      setIsAiResponding(false);
+      setCurrentAiResponse('');
+      alert(`오류가 발생했습니다: ${data.message || '알 수 없는 오류'}`);
     };
 
     // 핸들러 등록
-    //webSocketService.on('openai:conversation','input_audio_transcript.delta', handleUserVoiceTranscript);
     webSocketService.on('openai:conversation', 'input_audio_transcript.done', handleUserVoiceComplete);
     webSocketService.on('openai:conversation', 'response.audio_transcript.delta', handleTextResponse);
     webSocketService.on('openai:conversation', 'response.done', handleTextDone);
@@ -172,24 +185,32 @@ export default function ChatRoom({ voiceStarted, voiceStopped, onRecognitionComp
     webSocketService.on('openai:error', handleError);
 
     return () => {
-    //  webSocketService.off('openai:conversation','input_audio_transcript.delta', handleUserVoiceTranscript);
+      // 핸들러 제거
       webSocketService.off('openai:conversation', 'input_audio_transcript.done', handleUserVoiceComplete);
       webSocketService.off('openai:conversation', 'response.audio_transcript.delta', handleTextResponse);
       webSocketService.off('openai:conversation', 'response.done', handleTextDone);
       webSocketService.off('sonju:suggestedQuestion', 'suggestion.response', handleSuggestedQuestions);
       webSocketService.off('sonju:officeInfo', 'officeInfo', handleOfficeInfo);
       webSocketService.off('openai:error', handleError);
-    };    
+    };
   }, [onRecognitionComplete, currentAiResponse]);
 
+  // 추천 질문 클릭 처리
   const handleQuestionClick = (question) => {
+    console.log('추천 질문 클릭:', question);
+    
+    // 사용자 메시지로 추가
     setMessages(prev => [...prev, {
       type: 'user',
       content: question,
       timestamp: new Date(),
-      outputIndex: prev.length
+      id: `suggested-${Date.now()}` // 고유 ID
     }]);
+    
+    // 추천 질문 숨기기
     setSuggestedQuestions([]);
+    
+    // 서버로 전송
     webSocketService.sendText(question);
   };
 
@@ -203,57 +224,78 @@ export default function ChatRoom({ voiceStarted, voiceStopped, onRecognitionComp
         </div>
       </div>
       
-      <div className="flex-1 overflow-y-auto pb-[90px] w-full">     
+      <div className="flex-1 overflow-y-auto pb-[90px] w-full">
+        {/* 메시지들과 특수 컴포넌트들을 순서대로 렌더링 */}
         {messages.map((message, index) => (
-          message.type === 'user' ? (
-            <UserBubble key={index} text={message.content} />
-          ) : (
-            <SonjuBubble key={index} text={message.content} />
-          )
+          <div key={message.id}>
+            {/* 일반 메시지 렌더링 */}
+            {message.type === 'user' ? (
+              <UserBubble text={message.content} />
+            ) : (
+              <SonjuBubble text={message.content} />
+            )}
+            
+            {/* 해당 AI 응답 후에 특수 컴포넌트들 표시 */}
+            {message.type === 'ai' && (
+              <>
+                {/* 동사무소 위치 정보 - 위치 관련 응답 후 표시 */}
+                {officeInfo?.pos && !showCall && (
+                  <Place 
+                    communityCenter="가까운 동사무소" 
+                    phoneNumber={officeInfo.tel}
+                    position={officeInfo.pos} 
+                  />
+                )}
+
+                {/* 전화번호 관련 UI - 전화 관련 응답 후 표시 */}
+                {showCall &&  (
+                  officeInfo?.tel ? (
+                    <Call communityCenter="가까운 동사무소" number={officeInfo.tel} />
+                  ) : (
+                    <SonjuBubble text="전화번호를 조회하고 있어요…" />
+                  )
+                )}
+
+                {/* 추천 질문들 - 마지막 AI 응답 후에만 표시 */}
+                {index === messages.length - 1 && suggestedQuestions.length > 0 && (
+                  <div className="px-6 mb-[24px]">
+                    <div className="font-bold text-[#000000] text-[22px] mb-4">
+                      다음 대화는 어떠세요?
+                    </div>
+                    <div className="flex gap-2 justify-between items-center">
+                      {suggestedQuestions.slice(0, 2).map((question, questionIndex) => (
+                        <button
+                          key={questionIndex}
+                          onClick={() => handleQuestionClick(question)}
+                          className="p-3 text-left font-bold text-[22px] text-gray500 bg-gray200 rounded-[10px] cursor-pointer hover:bg-gray300 w-[176px] h-[103px] flex items-center justify-center"
+                          style={{ wordBreak: 'keep-all' }}
+                        >
+                          {question}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
+          </div>
         ))}
         
-        {/* {isAiResponding && currentAiResponse && (
-          <SonjuBubble text={currentAiResponse} isTyping={true} />
-        )} */}
-
-        {officeInfo?.pos && !showCall && (
-          <Place communityCenter="가까운 동사무소" position={officeInfo.pos} />
-        )}
-
-        {showCall && (
-          officeInfo?.tel
-            ? <Call communityCenter="가까운 동사무소" number={officeInfo.tel} />
-            : <SonjuBubble text="전화번호를 조회하고 있어요…" />
-        )}
-
-        {suggestedQuestions.length > 0 && (
-          <div className="px-6">
-            <div className="font-bold text-[#000000] text-[22px] mb-4">
-              다음 대화는 어떠세요?
-            </div>
-            <div className="flex gap-2 justify-between items-center pb-[24px]">
-              {suggestedQuestions.map((question, index) => (
-                <button
-                  key={index}
-                  onClick={() => handleQuestionClick(question)}
-                  className="p-3 text-left font-bold text-[22px] text-gray500 bg-gray200 rounded-[10px] cursor-pointer hover:bg-gray300 w-[176px]"
-                >
-                  {question}
-                </button>
-              ))}
-            </div>
-          </div>
+        {/* 현재 AI 응답 스트리밍 중인 경우 */}
+        {isAiResponding && currentAiResponse && (
+          <SonjuBubble text={currentAiResponse} />
         )}
         
-        <ChatSummary />
+        {/* 채팅 요약 버튼 (메시지가 3개 이상일 때만 표시) */}
+        {messages.length >= 6 && <ChatSummary />}
       </div>
       
+      {/* 음성 인식 중일 때 표시 */}
       {isListening && (
         <div className="absolute bottom-0 w-full flex justify-center z-40">
           <SonjuListening />
         </div>
       )}
-   
     </div>
   );
 }
