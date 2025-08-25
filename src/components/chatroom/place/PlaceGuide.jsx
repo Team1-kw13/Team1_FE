@@ -16,7 +16,7 @@ export default function Place({ communityCenter, phoneNumber, position }) {
         <div className="text-[24px] text-[#2222222] font-bold" style={{wordBreak:'keep-all'}}>
           
         </div>
-        <div className="flex flex-row justify-start gap-[30px] mt-[12px]">
+        <div className="flex flex-row justify-start gap-[30px] mt-[12px] mb-[24px]">
           <PlaceMap officeInfo={officeInfo} />
         </div>
       </div>
