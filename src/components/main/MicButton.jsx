@@ -77,6 +77,9 @@ export default function MicButton({ onListeningStart, onListeningStop, onTranscr
         console.log("🎤 브라우저 스피치 인식 결과:", transcript);
         onTranscriptUpdate?.(transcript);
         onListeningStop?.(transcript);
+        try {
+          window.dispatchEvent(new CustomEvent('sonju:final_transcript', { detail: transcript }));
+        } catch {}
         if (/전화번호|전화해|전화 걸어|전화/i.test(transcript)) {
           try { window.dispatchEvent(new CustomEvent('sonju:call_intent', { detail: transcript })); } catch {}
           onCallIntent?.(transcript);
