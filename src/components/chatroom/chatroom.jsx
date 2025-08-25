@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect,useRef } from "react";
 import { useParams } from "react-router-dom";
 import Call from "./call/CallGuide";
 import ChatSummary from "./chat_summary";
@@ -21,6 +21,20 @@ export default function ChatRoom({ voiceStarted, voiceStopped, onRecognitionComp
   const {initialMessage} = useParams();
   const [isListening, setIsListening] = useState(false);
   const [hasInitMessage, setHasInitMessage] = useState(false);
+  const [currentStep, setCurrentStep] = useState('idle');
+  const lastFinalRef = useState(''); // 간단 ref 대체: 배열 첫 값 참조 (또는 useRef 써도 됨)
+  // 공통 “최종 텍스트” 처리: 말풍선 + sendText
+  const handleFinalText = (t) => {
+    const text = (t || '').trim();
+    if (!text) return;
+    if (lastFinalRef.current === text) return; // 중복 방지(WS/이벤트 동시 도착 대비)
+    lastFinalRef.current = text;
+    setMessages(prev => [...prev, { type: 'user', content: text, timestamp: new Date() }]);
+    try { webSocketService.sendText(text); } catch (e) { console.error('sendText failed', e); }
+    setIsListening(false);
+    setCurrentStep('idle');
+    onRecognitionComplete?.(text);
+  };
 
   // 전역 “전화 의도” 이벤트 수신
   useEffect(() => {
@@ -34,6 +48,12 @@ export default function ChatRoom({ voiceStarted, voiceStopped, onRecognitionComp
     };
     window.addEventListener('sonju:call_intent', onCallIntent);
     return () => window.removeEventListener('sonju:call_intent', onCallIntent);
+  }, []);
+
+  useEffect(() => {
+    const onFinal = (e) => handleFinalText(e?.detail);
+    window.addEventListener('sonju:final_transcript', onFinal);
+    return () => window.removeEventListener('sonju:final_transcript', onFinal);
   }, []);
 
   // 🔥 음성 시작/중지 신호를 props로 받아서 처리
@@ -84,6 +104,7 @@ export default function ChatRoom({ voiceStarted, voiceStopped, onRecognitionComp
     //   console.log('사용자 음성 인식 실시간: ', data);
     // };    
     
+    //이게문제같은디
     const handleUserVoiceComplete = (data) => {
       const text = (data?.transcript || "").trim();
       
