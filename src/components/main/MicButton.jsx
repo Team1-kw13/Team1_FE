@@ -58,6 +58,7 @@ export default function MicButton({ onListeningStart, onListeningStop, onTranscr
   //첫PCM청크가 서버에 도달하기 전에 stopSpeaking()을 안보내도록
   const hasAudioRef=useRef(false); 
   const stoppingRef = useRef(false);
+  const audioDataSentRef = useRef(false);
 
   // 브라우저 스피치 인식 추가
   const recognitionRef = useRef(null);
@@ -99,7 +100,7 @@ export default function MicButton({ onListeningStart, onListeningStop, onTranscr
         stopAudioRecognition(stream, audioContext, processor);
       }
     };
-  }, [onListeningStop, onTranscriptUpdate]);
+  }, [onListeningStop, onTranscriptUpdate, onCallIntent]);
 
   const startRecording = async () => {
     try {
@@ -113,13 +114,19 @@ export default function MicButton({ onListeningStart, onListeningStop, onTranscr
       setIsRecording(true);
       onListeningStart?.();
 
+      hasAudioRef.current = false;
+      audioDataSentRef.current = false;
+
       // 서버로 “녹음 시작” 알림 (시작 시 commit 보내지 않기)
       webSocketService.startSpeaking();
 
       // 오디오 캡처 시작 후 청크를 서버로 전송
       const audioSystem = await startAudioRecognition((arrayBuffer) => {
         const ok=webSocketService.sendAudioPCM16(arrayBuffer);
-        if(ok) hasAudioRef.current=true; //최소 1청크 보냈음 표시
+        if(ok) { 
+          hasAudioRef.current=true; //최소 1청크 보냈음 표시
+          audioDataSentRef.current=true;
+        }
       });
       audioSystemRef.current = audioSystem;
 
@@ -158,9 +165,15 @@ export default function MicButton({ onListeningStart, onListeningStop, onTranscr
     if (recogActiveRef.current) { try { recognitionRef.current?.stop(); } catch {} }
 
     // 서버로 녹음 끝 알림 (commit -> end)
-    webSocketService.stopSpeaking(hasAudioRef.current);
-    hasAudioRef.current=false;
+    //webSocketService.stopSpeaking(hasAudioRef.current);
+    if (audioDataSentRef.current) {
+      webSocketService.stopSpeaking(true);
+    } else {
+      webSocketService.stopSpeaking(false);
+    }
 
+    hasAudioRef.current=false;
+    audioDataSentRef.current=false;
     stoppingRef.current = false;
   };
 

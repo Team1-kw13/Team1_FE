@@ -235,9 +235,31 @@ export default function ChatRoom({ voiceStarted, voiceStopped, onRecognitionComp
   }, [voiceStarted, isListening]);
 
   useEffect(() => {
-    if (voiceStopped && isListening) {
-      console.log('[ChatRoom] 음성 인식 중지');
-      setIsListening(false);
+    if (voiceStopped) {
+      console.log('[ChatRoom] 음성 인식 중지됨');
+    }      
+    setIsListening(false);
+  }, [voiceStopped]);
+
+  // 초기 메시지 처리
+  useEffect(() => {
+    if (initialMessage && !hasInitMessage) {
+      const decodedMessage = decodeURIComponent(initialMessage);
+      console.log('초기 메세지: ', decodedMessage);
+
+      setMessages(prev => [...prev, {
+        type: 'user',
+        content: decodedMessage,
+        timestamp: new Date()
+      }]);
+
+      setHasInitMessage(true);
+      webSocketService.sendText(decodedMessage);
+      // setTimeout(() => {
+      //   if (webSocketService.isConnected) {
+      //     webSocketService.sendText(decodedMessage);
+      //   }
+      // }, 500);
     }
   }, [voiceStopped, isListening]);
 
@@ -438,12 +460,7 @@ export default function ChatRoom({ voiceStarted, voiceStopped, onRecognitionComp
     setPendingInitialMessage(question);
     setShowSuggestionsForIndex(null);
     setSuggestedQuestions([]);
-
-    setTimeout(() => {
-      if (webSocketService.isConnected) {
-        webSocketService.sendText(question);
-      }
-    }, 100);
+    webSocketService.sendText(question);
   };
 
   return (
