@@ -8,8 +8,6 @@ let sessionReady=false;
 let readyWaiters=[];
 let userTranscripts = {}; //사용자 발화 누적 저장
 let aiTranscripts= {}; //ai 응답 누적 저장
-let onUserTranscriptUpdate = null; //UI로 넘길 사용자 콜백
-let onAiTranscriptUpdate = null;
 let audioContext = null;
 let audioQueue = [];
 let isPlayingAudio = false;
@@ -37,28 +35,6 @@ async function resumeAudioContextIfNeeded() {
 
 // WebSocket 연결
 function connect(url = import.meta.env.VITE_WEBSOCKET_URL) {
-  // // 이미 연결되어 있으면 기존 연결 사용
-  // if (isConnected) {
-  //   console.log('✅ 이미 WebSocket이 연결되어 있습니다');
-  //   return Promise.resolve();
-  // }
-
-  // // 연결 시도 중이면 대기
-  // if (isConnecting) {
-  //   console.log('⏳ WebSocket 연결 시도 중입니다');
-  //   return new Promise((resolve) => {
-  //     const checkConnection = () => {
-  //       if (isConnected) {
-  //         resolve();
-  //       } else if (!isConnecting) {
-  //         resolve(); // 연결 실패해도 resolve
-  //       } else {
-  //         setTimeout(checkConnection, 100);
-  //       }
-  //     };
-  //     checkConnection();
-  //   });
-  // }
   if (isConnected || isConnecting) {
     console.log("이미 연결 중이거나 연결되었습니다");
     return Promise.resolve();
@@ -69,66 +45,50 @@ function connect(url = import.meta.env.VITE_WEBSOCKET_URL) {
 
   return new Promise((resolve, reject) => {
     try {
-      ws = new WebSocket(url); // 소켓 연결
+      ws = new WebSocket(url);
       ws.binaryType = 'arraybuffer';
-      
-      //ws.binaryType = "arraybuffer"; //오디오 바이너리 전송 대비
-
-      ws.onopen = function() { // 소켓이 열림 = 연결 성공
-        console.log('✅ WebSocket 연결 성공');
+      //소켓 연결 성공 시
+      ws.onopen = function() {
         isConnected = true;
         isConnecting = false;
-        connectionAttempts = 0; // 연결 성공 -> 연결 시도 횟수 초기화
+        connectionAttempts = 0;//연결 시도 횟수 초기화
         userTranscripts = {};
         aiTranscripts = {};
-        {/*
-        // 임시 해결: 서버가 READY 신호를 안 줄 때 클라에서 바로 세션 ready 처리
-        sessionReady = true;
-        readyWaiters.forEach(r => r());
-        readyWaiters = [];
-        */}
-        
         resolve();
       };
       
-      ws.onmessage = function(event) { // 서버 -> 클라 메세지
+      //서버->클라 메시지
+      ws.onmessage = function(event) {
         if (typeof event.data === 'string') {
             const message = JSON.parse(event.data);
-            console.log ("서버에서 받은 string type 메세지: ", message);
             handleMessage(message);
         } else if (event.data instanceof ArrayBuffer) {
           handleMessageBinary(event.data);
         } else if (event.data instanceof Blob) {
-            console.log ("서버에서 받은 오디오(Blob) 메세지: ", event.data);
             handleMessageBlob({ type: '', data: event.data});
-        } else {
-            console.log ("서버에서 JSON, Blob 이외의 type 메세지 수신: ", event.data);
         }
-      }; //GPT 응답 관련 코드 임시 연결 종료
+      };
       
-      ws.onclose = function() { // 소켓 연결 종료
-        console.log('🔌 WebSocket 연결 종료');
+      //소켓 연결 종료
+      ws.onclose = function() {
         isConnected = false;
         isConnecting = false;
       };
       
-      ws.onerror = function(error) { // 소켓 연결 오류
-        console.error('❌ WebSocket 에러:', error);
+      //소켓 연결 오류
+      ws.onerror = function(error) {
         isConnected = false;
         isConnecting = false;
-        
+        //재연결시도
         if (connectionAttempts < maxConnectionAttempts) {
           setTimeout(() => {
-            console.log(`🔄 재연결 시도 ${connectionAttempts}/${maxConnectionAttempts}`);
             connect(url);
           }, 2000);
         }
-        
         reject(error);
       };
 
     } catch (error) {
-      console.error('WebSocket 생성 실패:', error);
       isConnecting = false;
       reject(error);
     }
@@ -139,31 +99,9 @@ function connect(url = import.meta.env.VITE_WEBSOCKET_URL) {
 function handleMessage(data) {
   const { channel, type } = data;
 
-    // 서버 에러 패킷 처리 (type 없이 옴)
-  if (channel === 'openai:error') {
-    console.error('🛑 서버 오류:', data.code, data.message);
-    return;
-  }
-  
-  // 유효성 체크
-  if (!type && !channel) {
-    console.warn('알 수 없는 메시지 형식:', data);
-    return;
-  }
-
-  if( type && type.includes('input_audio_transcript')) { //0820수정
-    console.log('사용자 음성 인식 메세지' ,{channel, type, data});
-  }
-
-  // 1) 정확히 일치 (channel:type)
-  const keys = [];
-  if (channel && type) keys.push(`${channel}:${type}`);
-
-  // 2) 타입-only 리스너 (예: 'preprompted')까지 호출
-  if (type) keys.push(type);
-
-  // 3) 채널 와일드카드 (예: 'openai:conversation:*')까지 호출
-  if (channel) keys.push(`${channel}:*`);
+  // 서버 에러 (type 없이 옴)
+  if (channel === 'openai:error') {return;}
+  if (!type && !channel) {return;}
 
   // 등록된 핸들러 실행
   keys.forEach((k) => {
@@ -178,32 +116,10 @@ function handleMessage(data) {
       });
     }
   });
-
-  
 }
 
-// 오디오 Blob 처리
-async function handleAudioBlob(blob) {
-  try {
-    console.log('오디오 Blob 처리 시작:', { size: blob.size, type: blob.type });
-    
-    // 최소 크기 체크
-    // if (blob.size < 100) {
-    //   console.warn('오디오 Blob 크기가 너무 작음:', blob.size);
-    //   return;
-    // }
-    
-    const arrayBuffer = await blob.arrayBuffer();
-    
-    // PCM 데이터로 직접 처리
-    await playPCMAudio(arrayBuffer);
-    
-  } catch (error) {
-    console.error('오디오 Blob 처리 실패:', error);
-  }
-}
-
- async function handleMessageBlob(blob) {
+  //blob형태를 이진 처리 함수로 전달
+  async function handleMessageBlob(blob) {
    try {
      const arrayBuffer = await blob.arrayBuffer();
      await handleMessageBinary(arrayBuffer);
@@ -212,6 +128,7 @@ async function handleAudioBlob(blob) {
    }
  }
 
+ //소리를 숫자샘플로 표현(PCM)
  async function handleMessageBinary(arrayBuffer) {
    const bytes = new Uint8Array(arrayBuffer);
    const isRIFF = bytes[0] === 0x52 && bytes[1] === 0x49 && bytes[2] === 0x46 && bytes[3] === 0x46; // 'RIFF'
@@ -226,21 +143,20 @@ async function handleAudioBlob(blob) {
        await playAudioBuffer(arrayBuffer);
        return;
      }
-     await playAudioBuffer(arrayBuffer); // 브라우저가 코덱 추론 가능 시
+     await playAudioBuffer(arrayBuffer);
    } catch (e) {
-     console.warn('decodeAudioData 실패 → PCM 폴백 시도:', e);
-     await playPCMAudio(arrayBuffer); // 24kHz mono PCM16 가정
+     await playPCMAudio(arrayBuffer);
    }
  }
 
-
-// PCM 오디오 직접 재생
+// pcm을 Float32로 포맷 후 큐에 버퍼를 넣음
 async function playPCMAudio(arrayBuffer) {
   if (!audioContext) return;
   try {
     const pcm = new Int16Array(arrayBuffer);
     const f32 = new Float32Array(pcm.length);
-    for (let i = 0; i < pcm.length; i++) f32[i] = Math.max(-1, Math.min(1, pcm[i] / 32768));
+    for (let i = 0; i < pcm.length; i++) 
+      f32[i] = Math.max(-1, Math.min(1, pcm[i] / 32768));
     const sampleRate = 24000;
     const buf = audioContext.createBuffer(1, f32.length, sampleRate);
     buf.getChannelData(0).set(f32);
@@ -251,21 +167,8 @@ async function playPCMAudio(arrayBuffer) {
   }
 }
 
-// 오디오 재생
-async function playAudioBuffer(arrayBuffer) {
-  if (!audioContext) return;
-  try {
-    const audioBuffer = await audioContext.decodeAudioData(arrayBuffer.slice(0));
-    audioQueue.push(audioBuffer);
-    if (!isPlayingAudio) playNextAudio();
-  } catch (error) {
-    console.error('오디오 디코딩 실패:', error);
-    throw error;
-  }
-  
-}
-
-async function playNextAudio() {
+//큐를 실행
+async function playNextAudio() { //audioQueue는 전역이라 인자로 안받아도 됨
   if (audioQueue.length === 0) { isPlayingAudio = false; return; }
   isPlayingAudio = true;
   const source = audioContext.createBufferSource();
@@ -278,7 +181,7 @@ async function playNextAudio() {
   }
 }
 
-// 핸들러 등록 (중복 방지)
+// 핸들러 등록
 function on(channelOrType, typeOrHandler, handler) {
   let key;
   let handlerFunction;
@@ -298,9 +201,7 @@ function on(channelOrType, typeOrHandler, handler) {
   // 중복 핸들러 방지
   if (!messageHandlers[key].includes(handlerFunction)) {
     messageHandlers[key].push(handlerFunction);
-//    console.log('📝 핸들러 등록:', key);
   } else {
-    console.log('⚠️ 이미 등록된 핸들러:', key);
   }
 }
 
@@ -324,50 +225,42 @@ function off(channelOrType, typeOrHandler, handler) {
     });
     
     if (messageHandlers[key].length < initialLength) {
-//      console.log('🗑️ 핸들러 제거:', key);
     }
   }
 }
 
-// 메시지 전송
-//서버가 요구하는 type, data형태로만 전송하기xxxx
-//payload를 평평하게 보내기?
+//payload를 포함한 메시지 전송
 function send(channel, type, payload = {}) {
   if (!ws || !isConnected) {
-    console.error('❌ WebSocket이 연결되지 않음. 현재 상태:', { 
+    console.error('WebSocket이 연결되지 않음. 현재 상태:', { 
       wsExists: !!ws, 
       isConnected, 
       isConnecting 
     });
     return false;
   }
-  
-  
+
   const message = {
     channel,
     type,
     ...payload
   };
   
+  //메시지 전송
   try {
-    console.log('📤 메시지 전송:', message);
     ws.send(JSON.stringify(message));
     return true;
   } catch (error) {
-    console.error('❌ 메시지 전송 실패:', error);
     return false;
   }
 }
 
-// === 대화 관련 함수들 ===
+//음성 발화 시작
 function startSpeaking() {
-  console.log('🎤 음성 발화 시작');
-  //return send(CHANNEL,'input_audio_buffer.commit');
   return true;
 }
 
-// 사용자 음성 발화
-// PCM16 ArrayBuffer(또는 Int16Array.buffer)를 그대로 보냄?
+// 사용자 음성 pcm16->base64변환->서버로 전송
 function sendAudioPCM16(arrayBuffer) {
   if (!ws || ws.readyState !== WebSocket.OPEN) return false;
   try {
@@ -386,24 +279,22 @@ function sendAudioPCM16(arrayBuffer) {
 }
 
 function stopSpeaking(hasAudio=true) {
-  console.log('🛑 음성 발화 종료');
   if(hasAudio) send(CHANNEL,'input_audio_buffer.commit');
   return send(CHANNEL,'input_audio_buffer.end');
 }
 
+//프리프롬프트 말풍선?
 function sendText(text) {
-  console.log('📝 텍스트 전송:', text);
-  return send('openai:conversation', 'input_text', {text});
+  return send(CHANNEL, 'input_text', {text});
 }
 
 function selectPrePrompt(option) {
   return send(CHANNEL, 'preprompted', {enum: option});
 }
 
-
 function requestSummary() {
   if (!ws || !isConnected) {
-    console.error('❌ WebSocket이 연결되지 않음');
+    console.error('WebSocket이 연결되지 않음');
     return false;
   }
   
@@ -412,21 +303,15 @@ function requestSummary() {
   };
   
   try {
-    console.log('📤 요약 요청:', message);
     ws.send(JSON.stringify(message));
     return true;
   } catch (error) {
-    console.error('❌ 요약 요청 실패:', error);
+    console.error('요약 요청 실패:', error);
     return false;
   }
 }
 
-//위치 정보 관련 함수
-function sendUserLocation(lat,lon) {
-    console.log('📍 사용자 위치 전송:', { lat, lon });
-    return send('sonju:currentCoord', 'userCoord', { lat, lon });
-}
-
+//디바이스에서 좌표를 얻음
 function sendCurrentLocation() {
     return new Promise((resolve, reject) => {
         if (!navigator.geolocation) {
@@ -448,7 +333,7 @@ function sendCurrentLocation() {
                 }
             },
             (error) => {
-                console.error('❌ 위치 정보 가져오기 실패:', error);
+                console.error('위치 정보 가져오기 실패:', error);
                 reject(error);
             },
             { enableHighAccuracy: true ,
@@ -459,23 +344,24 @@ function sendCurrentLocation() {
     });
 }
 
+//위에서 얻은 좌표를 서버에 전송
+function sendUserLocation(lat,lon) {
+    return send('sonju:currentCoord', 'userCoord', { lat, lon });
+}
+
 function disconnect() {
   if (ws) {
     ws.close();
     ws = null;
     isConnected = false;
     isConnecting = false;
-    console.log('🔌 연결 종료');
   }
 }
 
-// 모든 핸들러 제거 (컴포넌트 언마운트 시)
 function clearAllHandlers() {
   messageHandlers = {};
-  console.log('🗑️ 모든 핸들러 제거');
 }
 
-// 연결 상태 확인
 function getConnectionStatus() {
   return {
     isConnected,
@@ -497,9 +383,8 @@ const webSocketService = {
   startSpeaking: startSpeaking,
   sendAudioPCM16: sendAudioPCM16,
   stopSpeaking: stopSpeaking,
-  selectPrePrompt: selectPrePrompt,
   sendText:sendText,
-  playAudioBuffer,
+  selectPrePrompt: selectPrePrompt,
   resumeAudioContextIfNeeded,
   
   // 요약 관련
