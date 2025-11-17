@@ -36,7 +36,6 @@ async function resumeAudioContextIfNeeded() {
 // WebSocket 연결
 function connect(url = import.meta.env.VITE_WEBSOCKET_URL) {
   if (isConnected || isConnecting) {
-    console.log("이미 연결 중이거나 연결되었습니다");
     return Promise.resolve();
   }
 
@@ -197,7 +196,7 @@ function on(channelOrType, typeOrHandler, handler) {
   if (!messageHandlers[key]) {
     messageHandlers[key] = [];
   }
-  
+
   // 중복 핸들러 방지
   if (!messageHandlers[key].includes(handlerFunction)) {
     messageHandlers[key].push(handlerFunction);
